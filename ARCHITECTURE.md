@@ -30,6 +30,20 @@ In the OS app-data directory:
 Why this split: HTML stays as plain files (easy to export, inspect, and back up),
 while SQLite handles the relationships, tags, and search.
 
+### v0.1 (implemented, pre-SQLite)
+
+Until SQLite lands in v0.2, each page directory also carries its metadata:
+
+```
+<app-data>/pages/<page-id>/
+  meta.json      # { id, title, createdAt, updatedAt }
+  current.html   # the page's current HTML
+```
+
+`list_pages` reads the `meta.json` files; the v0.2 migration imports them into
+SQLite. Page ids are backend-generated UUID v4 and are validated before any
+path is built.
+
 ## Data model
 
 ```sql

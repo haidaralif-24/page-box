@@ -17,6 +17,8 @@ export default defineConfig(() => ({
     port: 1420,
     strictPort: true,
     host: host || false,
+    // Allow Arena's proxied live-preview hosts (https://<port>-<sandbox>.e2b.app)
+    allowedHosts: [".e2b.app"],
     hmr: host
       ? {
           protocol: "ws",

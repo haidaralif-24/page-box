@@ -29,7 +29,7 @@ without learning how to manage files, editors, or local servers.
 
 ## Status
 
-Planning / early development. See [ROADMAP.md](ROADMAP.md).
+v0.1 — paste and preview works. See [ROADMAP.md](ROADMAP.md).
 
 ## Tech stack
 
@@ -56,6 +56,17 @@ Prerequisites: Node.js 20+, [pnpm](https://pnpm.io), Rust (via rustup), and the
 pnpm install
 pnpm tauri dev
 ```
+
+Other commands:
+
+```bash
+pnpm test    # unit tests for input cleaning + CSP injection
+pnpm dev     # UI only, in a plain browser
+```
+
+`pnpm dev` without Tauri runs the UI with a localStorage-backed mock backend
+(labeled "Browser preview" in the header) so the frontend can be developed
+without a desktop build. Real on-disk storage requires `pnpm tauri dev`.
 
 ## License
 

@@ -1,10 +1,14 @@
 # Roadmap
 
 ## v0.1 - Paste and preview
-- [ ] Tauri + React + TypeScript project running
-- [ ] Add page: paste box, input cleaning, title detection
-- [ ] Sandboxed preview iframe
-- [ ] Save HTML to disk, list saved pages after restart
+- [x] Tauri + React + TypeScript project running
+- [x] Add page: paste box, input cleaning, title detection
+- [x] Sandboxed preview iframe
+- [x] Save HTML to disk, list saved pages after restart
+- [x] Unit tests for input cleaning + CSP injection (vitest, mirrored Rust tests)
+
+Note: page delete was pulled forward from v0.2 (small, and makes testing easier).
+v0.1 stores metadata as `meta.json` per page; SQLite replaces it in v0.2.
 
 ## v0.2 - Organize
 - [ ] SQLite schema + migrations

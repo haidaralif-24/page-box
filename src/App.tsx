@@ -1,50 +1,143 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useState } from "react";
+import {
+  addPage,
+  deletePage,
+  getPageHtml,
+  isTauri,
+  listPages,
+  type PageMeta,
+} from "./lib/backend";
+import { PageCard } from "./components/PageCard";
+import { PasteDialog } from "./components/PasteDialog";
+import { PreviewFrame } from "./components/PreviewFrame";
 import "./App.css";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+type View = { name: "gallery" } | { name: "page"; page: PageMeta; html: string };
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+function App() {
+  const [pages, setPages] = useState<PageMeta[]>([]);
+  const [view, setView] = useState<View>({ name: "gallery" });
+  const [showPaste, setShowPaste] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setPages(await listPages());
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  async function handleSave(rawText: string) {
+    const meta = await addPage(rawText);
+    setShowPaste(false);
+    await refresh();
+    await openPage(meta);
+  }
+
+  async function openPage(page: PageMeta) {
+    try {
+      const html = await getPageHtml(page.id);
+      setView({ name: "page", page, html });
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handleDelete(page: PageMeta) {
+    if (!window.confirm(`Delete "${page.title}"? This can't be undone.`)) return;
+    try {
+      await deletePage(page.id);
+      setView({ name: "gallery" });
+      await refresh();
+    } catch (e) {
+      setError(String(e));
+    }
   }
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <div className="app">
+      <header className="app-header">
+        <button
+          className="brand"
+          onClick={() => setView({ name: "gallery" })}
+          title="Go to all pages"
+        >
+          <img src="/pagebox.svg" alt="" width="26" height="26" />
+          <span>Pagebox</span>
+        </button>
+        <div className="header-actions">
+          {!isTauri() && (
+            <span
+              className="badge"
+              title="Running outside Tauri: pages are stored in this browser's localStorage, not on disk."
+            >
+              Browser preview
+            </span>
+          )}
+          <button className="btn primary" onClick={() => setShowPaste(true)}>
+            + Add page
+          </button>
+        </div>
+      </header>
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+      {error && <div className="error-banner">{error}</div>}
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      {view.name === "gallery" ? (
+        <main className="gallery">
+          {loading ? (
+            <p className="muted">Loading…</p>
+          ) : pages.length === 0 ? (
+            <div className="empty-state">
+              <img src="/pagebox.svg" alt="" width="56" height="56" />
+              <h2>No pages yet</h2>
+              <p>
+                Paste the HTML your AI tool gave you and it will show up here —
+                rendered safely, saved locally.
+              </p>
+              <button className="btn primary" onClick={() => setShowPaste(true)}>
+                + Add your first page
+              </button>
+            </div>
+          ) : (
+            <div className="page-grid">
+              {pages.map((page) => (
+                <PageCard key={page.id} page={page} onOpen={openPage} />
+              ))}
+            </div>
+          )}
+        </main>
+      ) : (
+        <main className="page-view">
+          <div className="page-toolbar">
+            <button className="btn" onClick={() => setView({ name: "gallery" })}>
+              ← All pages
+            </button>
+            <h1 className="page-title">{view.page.title}</h1>
+            <button
+              className="btn danger"
+              onClick={() => void handleDelete(view.page)}
+            >
+              Delete
+            </button>
+          </div>
+          <PreviewFrame html={view.html} title={view.page.title} />
+        </main>
+      )}
+
+      {showPaste && (
+        <PasteDialog onSave={handleSave} onClose={() => setShowPaste(false)} />
+      )}
+    </div>
   );
 }
 
