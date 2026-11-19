@@ -1,13 +1,17 @@
 //! Local file storage for pages + SQLite metadata (ARCHITECTURE.md).
 //!
-//! v0.2 layout:
+//! v0.4 layout:
 //!
 //! ```text
 //! <app-data>/
 //!   app.db           # SQLite database (metadata)
-//!   pages/
-//!     <page-id>/
-//!       current.html # the page's current HTML
+//!   workspace/       # Actual directory structure
+//!     Unsorted/
+//!       my-first-page.html
+//!     Projects/
+//!       website-landing.html
+//!       Assets/
+//!         logo.html
 //! ```
 
 use std::fs;
@@ -15,7 +19,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use uuid::Uuid;
 
 use crate::cleaning;
@@ -27,6 +31,7 @@ pub struct PageMeta {
     pub id: String,
     pub collection_id: Option<i64>,
     pub title: String,
+    pub file_name: String,
     pub created_at: u64,
     pub updated_at: u64,
 }
@@ -38,13 +43,39 @@ fn now_millis() -> u64 {
         .as_millis() as u64
 }
 
-fn pages_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("could not resolve app data directory: {e}"))?
-        .join("pages");
-    fs::create_dir_all(&dir).map_err(|e| format!("could not create pages directory: {e}"))?;
+fn workspace_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    db::workspace_dir(app)
+}
+
+fn slugify(title: &str) -> String {
+    title
+        .to_lowercase()
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+        .collect::<String>()
+        .replace(" ", "-")
+}
+
+fn get_dir_for_collection(app: &AppHandle, collection_id: Option<i64>) -> Result<PathBuf, String> {
+    let conn = db::get_conn(app)?;
+    let rel_path: Option<String> = if let Some(cid) = collection_id {
+        conn.query_row(
+            "SELECT rel_path FROM collections WHERE id = ?1",
+            rusqlite::params![cid],
+            |row| row.get(0)
+        ).ok()
+    } else {
+        Some("Unsorted".to_string())
+    };
+
+    let ws = workspace_dir(app)?;
+    let dir = if let Some(rp) = rel_path {
+        ws.join(&rp)
+    } else {
+        ws.clone()
+    };
+    
+    fs::create_dir_all(&dir).map_err(|e| format!("could not create collection directory: {e}"))?;
     Ok(dir)
 }
 
@@ -61,26 +92,32 @@ fn validate_page_id(id: &str) -> Result<(), String> {
 pub fn add_page(app: &AppHandle, raw_text: &str, collection_id: Option<i64>) -> Result<PageMeta, String> {
     let cleaned = cleaning::clean_input(raw_text);
     let id = Uuid::new_v4().to_string();
-    let dir = pages_dir(app)?.join(&id);
-    fs::create_dir_all(&dir).map_err(|e| format!("could not create page directory: {e}"))?;
-    
-    // Write the HTML first, then meta to DB: a directory only counts as a page
-    // once its metadata is committed.
-    fs::write(dir.join("current.html"), &cleaned.html)
-        .map_err(|e| format!("could not save page HTML: {e}"))?;
-        
     let now = now_millis();
     
+    let dir = get_dir_for_collection(app, collection_id)?;
+    
+    let base_slug = slugify(&cleaned.title);
+    let mut file_name = format!("{}.html", base_slug);
+    let mut counter = 1;
+    while dir.join(&file_name).exists() {
+        file_name = format!("{}-{}.html", base_slug, counter);
+        counter += 1;
+    }
+    
+    fs::write(dir.join(&file_name), &cleaned.html)
+        .map_err(|e| format!("could not save page HTML: {e}"))?;
+        
     let conn = db::get_conn(app)?;
     conn.execute(
-        "INSERT INTO pages (id, collection_id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-        rusqlite::params![id, collection_id, cleaned.title, now, now],
+        "INSERT INTO pages (id, collection_id, title, file_name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        rusqlite::params![id, collection_id, cleaned.title, file_name.clone(), now, now],
     ).map_err(|e| format!("could not save page metadata to db: {e}"))?;
 
     Ok(PageMeta {
         id: id.clone(),
         collection_id,
         title: cleaned.title,
+        file_name,
         created_at: now,
         updated_at: now,
     })
@@ -91,7 +128,7 @@ pub fn list_pages(app: &AppHandle, collection_id: Option<i64>) -> Result<Vec<Pag
     
     if let Some(cid) = collection_id {
         let mut stmt = conn
-            .prepare("SELECT id, collection_id, title, created_at, updated_at FROM pages WHERE collection_id = ?1 ORDER BY created_at DESC")
+            .prepare("SELECT id, collection_id, title, file_name, created_at, updated_at FROM pages WHERE collection_id = ?1 ORDER BY created_at DESC")
             .map_err(|e| format!("could not prepare list pages: {e}"))?;
 
         let pages = stmt
@@ -100,8 +137,9 @@ pub fn list_pages(app: &AppHandle, collection_id: Option<i64>) -> Result<Vec<Pag
                     id: row.get(0)?,
                     collection_id: row.get(1)?,
                     title: row.get(2)?,
-                    created_at: row.get(3)?,
-                    updated_at: row.get(4)?,
+                    file_name: row.get(3)?,
+                    created_at: row.get(4)?,
+                    updated_at: row.get(5)?,
                 })
             })
             .map_err(|e| format!("could not query pages: {e}"))?
@@ -111,7 +149,7 @@ pub fn list_pages(app: &AppHandle, collection_id: Option<i64>) -> Result<Vec<Pag
         Ok(pages)
     } else {
         let mut stmt = conn
-            .prepare("SELECT id, collection_id, title, created_at, updated_at FROM pages ORDER BY created_at DESC")
+            .prepare("SELECT id, collection_id, title, file_name, created_at, updated_at FROM pages ORDER BY created_at DESC")
             .map_err(|e| format!("could not prepare list pages: {e}"))?;
 
         let pages = stmt
@@ -120,8 +158,9 @@ pub fn list_pages(app: &AppHandle, collection_id: Option<i64>) -> Result<Vec<Pag
                     id: row.get(0)?,
                     collection_id: row.get(1)?,
                     title: row.get(2)?,
-                    created_at: row.get(3)?,
-                    updated_at: row.get(4)?,
+                    file_name: row.get(3)?,
+                    created_at: row.get(4)?,
+                    updated_at: row.get(5)?,
                 })
             })
             .map_err(|e| format!("could not query pages: {e}"))?
@@ -134,18 +173,32 @@ pub fn list_pages(app: &AppHandle, collection_id: Option<i64>) -> Result<Vec<Pag
 
 pub fn delete_page(app: &AppHandle, page_id: &str) -> Result<(), String> {
     validate_page_id(page_id)?;
-    
-    // Delete from DB first
     let conn = db::get_conn(app)?;
+    
+    let (file_name, collection_id): (String, Option<i64>) = conn.query_row(
+        "SELECT file_name, collection_id FROM pages WHERE id = ?1",
+        rusqlite::params![page_id],
+        |row| Ok((row.get(0)?, row.get(1)?))
+    ).map_err(|e| format!("could not get page info: {e}"))?;
+    
+    let dir = get_dir_for_collection(app, collection_id)?;
+    
+    let _ = fs::remove_file(dir.join(&file_name));
+    
+    let mut stmt = conn.prepare("SELECT file_name FROM versions WHERE page_id = ?1")
+        .map_err(|e| format!("could not prepare list versions: {e}"))?;
+    let version_files: Vec<String> = stmt.query_map(rusqlite::params![page_id], |row| row.get(0))
+        .map_err(|e| format!("could not query versions: {e}"))?
+        .filter_map(Result::ok)
+        .collect();
+        
+    for v_file in version_files {
+        let _ = fs::remove_file(dir.join(&v_file));
+    }
+    
     conn.execute("DELETE FROM pages WHERE id = ?1", rusqlite::params![page_id])
         .map_err(|e| format!("could not delete page from db: {e}"))?;
         
-    // Then delete directory
-    let dir = pages_dir(app)?.join(page_id);
-    if dir.exists() {
-        fs::remove_dir_all(&dir).map_err(|e| format!("could not delete page directory: {e}"))?;
-    }
-    
     Ok(())
 }
 
@@ -154,7 +207,7 @@ pub fn delete_page(app: &AppHandle, page_id: &str) -> Result<(), String> {
 pub struct Version {
     pub id: i64,
     pub page_id: String,
-    pub file_path: String,
+    pub file_name: String,
     pub created_at: u64,
 }
 
@@ -163,36 +216,30 @@ pub fn replace_page(app: &AppHandle, page_id: &str, raw_text: &str) -> Result<Pa
     let cleaned = cleaning::clean_input(raw_text);
     let conn = db::get_conn(app)?;
     
-    // Get current page info (we just check it exists, title is updated later)
-    let _exists: String = conn.query_row(
-        "SELECT title FROM pages WHERE id = ?1",
+    let (_title, file_name, collection_id): (String, String, Option<i64>) = conn.query_row(
+        "SELECT title, file_name, collection_id FROM pages WHERE id = ?1",
         rusqlite::params![page_id],
-        |row| row.get(0)
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?))
     ).map_err(|e| format!("could not get page info: {e}"))?;
     
-    // Generate new version file name
     let now = now_millis();
-    let version_file = format!("{}.html", now);
-    let dir = pages_dir(app)?.join(page_id);
-    fs::create_dir_all(&dir).map_err(|e| format!("could not create page directory: {e}"))?;
+    let version_file = format!("{}-v{}.html", file_name.trim_end_matches(".html"), now);
     
-    // Write new version
+    let dir = get_dir_for_collection(app, collection_id)?;
+    
     fs::write(dir.join(&version_file), &cleaned.html)
         .map_err(|e| format!("could not save version HTML: {e}"))?;
     
-    // Also update current.html for easy access
-    fs::write(dir.join("current.html"), &cleaned.html)
-        .map_err(|e| format!("could not update current.html: {e}"))?;
+    fs::write(dir.join(&file_name), &cleaned.html)
+        .map_err(|e| format!("could not update current HTML: {e}"))?;
     
-    // Insert version record
     conn.execute(
-        "INSERT INTO versions (page_id, file_path, created_at) VALUES (?1, ?2, ?3)",
+        "INSERT INTO versions (page_id, file_name, created_at) VALUES (?1, ?2, ?3)",
         rusqlite::params![page_id, version_file, now],
     ).map_err(|e| format!("could not save version: {e}"))?;
     
     let version_id = conn.last_insert_rowid();
     
-    // Update page with new current_version_id and updated_at
     conn.execute(
         "UPDATE pages SET current_version_id = ?1, updated_at = ?2, title = ?3 WHERE id = ?4",
         rusqlite::params![version_id, now, cleaned.title, page_id],
@@ -200,9 +247,10 @@ pub fn replace_page(app: &AppHandle, page_id: &str, raw_text: &str) -> Result<Pa
     
     Ok(PageMeta {
         id: page_id.to_string(),
-        collection_id: None, // Will be fetched separately if needed
+        collection_id,
         title: cleaned.title,
-        created_at: now, // Simplified for return
+        file_name,
+        created_at: now,
         updated_at: now,
     })
 }
@@ -211,17 +259,24 @@ pub fn get_page_html(app: &AppHandle, page_id: &str, version_id: Option<i64>) ->
     validate_page_id(page_id)?;
     let conn = db::get_conn(app)?;
     
-    let file_path: String = if let Some(v_id) = version_id {
+    let (file_name, collection_id): (String, Option<i64>) = conn.query_row(
+        "SELECT file_name, collection_id FROM pages WHERE id = ?1",
+        rusqlite::params![page_id],
+        |row| Ok((row.get(0)?, row.get(1)?))
+    ).map_err(|e| format!("could not get page info: {e}"))?;
+    
+    let target_file: String = if let Some(v_id) = version_id {
         conn.query_row(
-            "SELECT file_path FROM versions WHERE id = ?1 AND page_id = ?2",
+            "SELECT file_name FROM versions WHERE id = ?1 AND page_id = ?2",
             rusqlite::params![v_id, page_id],
             |row| row.get(0)
-        ).map_err(|e| format!("could not get version file path: {e}"))?
+        ).map_err(|e| format!("could not get version file name: {e}"))?
     } else {
-        "current.html".to_string()
+        file_name
     };
     
-    let path = pages_dir(app)?.join(page_id).join(&file_path);
+    let dir = get_dir_for_collection(app, collection_id)?;
+    let path = dir.join(&target_file);
     fs::read_to_string(&path).map_err(|e| format!("could not read page: {e}"))
 }
 
@@ -230,7 +285,7 @@ pub fn list_versions(app: &AppHandle, page_id: &str) -> Result<Vec<Version>, Str
     let conn = db::get_conn(app)?;
     
     let mut stmt = conn
-        .prepare("SELECT id, page_id, file_path, created_at FROM versions WHERE page_id = ?1 ORDER BY created_at DESC")
+        .prepare("SELECT id, page_id, file_name, created_at FROM versions WHERE page_id = ?1 ORDER BY created_at DESC")
         .map_err(|e| format!("could not prepare list versions: {e}"))?;
 
     let versions = stmt
@@ -238,7 +293,7 @@ pub fn list_versions(app: &AppHandle, page_id: &str) -> Result<Vec<Version>, Str
             Ok(Version {
                 id: row.get(0)?,
                 page_id: row.get(1)?,
-                file_path: row.get(2)?,
+                file_name: row.get(2)?,
                 created_at: row.get(3)?,
             })
         })
@@ -253,35 +308,37 @@ pub fn restore_version(app: &AppHandle, page_id: &str, version_id: i64) -> Resul
     validate_page_id(page_id)?;
     let conn = db::get_conn(app)?;
     
-    // Get the version file path
-    let file_path: String = conn.query_row(
-        "SELECT file_path FROM versions WHERE id = ?1 AND page_id = ?2",
+    let (file_name, collection_id): (String, Option<i64>) = conn.query_row(
+        "SELECT file_name, collection_id FROM pages WHERE id = ?1",
+        rusqlite::params![page_id],
+        |row| Ok((row.get(0)?, row.get(1)?))
+    ).map_err(|e| format!("could not get page info: {e}"))?;
+    
+    let old_version_file: String = conn.query_row(
+        "SELECT file_name FROM versions WHERE id = ?1 AND page_id = ?2",
         rusqlite::params![version_id, page_id],
         |row| row.get(0)
-    ).map_err(|e| format!("could not get version file path: {e}"))?;
+    ).map_err(|e| format!("could not get version file name: {e}"))?;
     
-    // Read the old version
-    let html = fs::read_to_string(pages_dir(app)?.join(page_id).join(&file_path))
+    let dir = get_dir_for_collection(app, collection_id)?;
+    let html = fs::read_to_string(dir.join(&old_version_file))
         .map_err(|e| format!("could not read version: {e}"))?;
     
     let now = now_millis();
-    let new_version_file = format!("{}.html", now);
+    let new_version_file = format!("{}-v{}.html", file_name.trim_end_matches(".html"), now);
     
-    // Write as new current version
-    fs::write(pages_dir(app)?.join(page_id).join(&new_version_file), &html)
+    fs::write(dir.join(&new_version_file), &html)
         .map_err(|e| format!("could not save restored version: {e}"))?;
-    fs::write(pages_dir(app)?.join(page_id).join("current.html"), &html)
-        .map_err(|e| format!("could not update current.html: {e}"))?;
+    fs::write(dir.join(&file_name), &html)
+        .map_err(|e| format!("could not update current HTML: {e}"))?;
     
-    // Insert new version record
     conn.execute(
-        "INSERT INTO versions (page_id, file_path, created_at) VALUES (?1, ?2, ?3)",
+        "INSERT INTO versions (page_id, file_name, created_at) VALUES (?1, ?2, ?3)",
         rusqlite::params![page_id, new_version_file, now],
     ).map_err(|e| format!("could not save restored version record: {e}"))?;
     
     let new_version_id = conn.last_insert_rowid();
     
-    // Update page
     conn.execute(
         "UPDATE pages SET current_version_id = ?1, updated_at = ?2 WHERE id = ?3",
         rusqlite::params![new_version_id, now, page_id],
@@ -303,7 +360,6 @@ pub fn add_tag(app: &AppHandle, page_id: &str, tag_name: &str) -> Result<(), Str
     
     let tag_name_lower = tag_name.trim().to_lowercase();
     
-    // Insert or get tag
     conn.execute(
         "INSERT OR IGNORE INTO tags (name) VALUES (?1)",
         rusqlite::params![tag_name_lower],
@@ -315,7 +371,6 @@ pub fn add_tag(app: &AppHandle, page_id: &str, tag_name: &str) -> Result<(), Str
         |row| row.get(0)
     ).map_err(|e| format!("could not get tag id: {e}"))?;
     
-    // Link to page
     conn.execute(
         "INSERT OR IGNORE INTO page_tags (page_id, tag_id) VALUES (?1, ?2)",
         rusqlite::params![page_id, tag_id],
@@ -366,7 +421,7 @@ pub fn search_pages(app: &AppHandle, query: &str) -> Result<Vec<PageMeta>, Strin
     
     let mut stmt = conn
         .prepare("
-            SELECT DISTINCT p.id, p.collection_id, p.title, p.created_at, p.updated_at 
+            SELECT DISTINCT p.id, p.collection_id, p.title, p.file_name, p.created_at, p.updated_at 
             FROM pages p
             LEFT JOIN page_tags pt ON p.id = pt.page_id
             LEFT JOIN tags t ON pt.tag_id = t.id
@@ -381,8 +436,9 @@ pub fn search_pages(app: &AppHandle, query: &str) -> Result<Vec<PageMeta>, Strin
                 id: row.get(0)?,
                 collection_id: row.get(1)?,
                 title: row.get(2)?,
-                created_at: row.get(3)?,
-                updated_at: row.get(4)?,
+                file_name: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
             })
         })
         .map_err(|e| format!("could not query search results: {e}"))?
