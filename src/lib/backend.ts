@@ -73,13 +73,27 @@ function mockSaveCollections(collections: Collection[]): void {
 
 // --- Public API (same shape as the Rust commands) -------------------------
 
-export async function listPages(collectionId?: number | null): Promise<PageMeta[]> {
-  if (isTauri()) return invoke<PageMeta[]>("list_pages", { collectionId });
+export async function listPages(collectionId?: number | null, includeAll?: boolean): Promise<PageMeta[]> {
+  if (isTauri()) return invoke<PageMeta[]>("list_pages", { collectionId, includeAll: includeAll ?? false });
   const pages = mockListPages();
-  const filtered = collectionId !== undefined
-    ? pages.filter(p => p.collectionId === collectionId)
-    : pages.filter(p => p.collectionId === null);
+  if (includeAll) {
+    return pages.sort((a, b) => b.createdAt - a.createdAt);
+  }
+  // When collectionId is null or undefined, show only unsorted pages (collectionId === null)
+  const target = collectionId ?? null;
+  const filtered = pages.filter(p => p.collectionId === target);
   return filtered.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function countPagesPerCollection(): Promise<Array<[number | null, number]>> {
+  if (isTauri()) return invoke<Array<[number | null, number]>>("count_pages_per_collection");
+  const pages = mockListPages();
+  const counts = new Map<number | null, number>();
+  for (const p of pages) {
+    const key = p.collectionId ?? null;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return Array.from(counts.entries());
 }
 
 export async function addPage(rawText: string, collectionId?: number | null): Promise<PageMeta> {

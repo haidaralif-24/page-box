@@ -3,8 +3,12 @@ import { Collection } from "../lib/backend";
 
 interface FileTreeProps {
   collections: Collection[];
-  selectedCollectionId: number | null;
-  onSelect: (id: number | null) => void;
+  pageCounts: Map<number | null, number>;
+  selectedCollectionId: number | null; // null = unsorted selected; number = collection selected
+  isAllSelected: boolean;
+  onSelectAll: () => void;
+  onSelectUnsorted: () => void;
+  onSelect: (id: number) => void;
   onCreate: (parentId: number | null, name: string) => void;
   onRename: (id: number, newName: string) => void;
   onDelete: (collection: Collection) => void;
@@ -111,10 +115,11 @@ function TreeNodeComponent({
   onCancelEditing,
   editing,
   depth,
+  pageCounts,
 }: {
   node: TreeNode;
   selectedCollectionId: number | null;
-  onSelect: (id: number | null) => void;
+  onSelect: (id: number) => void;
   onRenameSubmit: (id: number, newName: string) => void;
   onDelete: (collection: Collection) => void;
   onStartCreate: (parentId: number) => void;
@@ -122,13 +127,13 @@ function TreeNodeComponent({
   onCancelEditing: () => void;
   editing: EditingState;
   depth: number;
+  pageCounts: Map<number | null, number>;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const hasChildren = node.children.length > 0;
   const isEditingThis = editing?.type === "rename" && editing.id === node.id;
   const isCreatingHere = editing?.type === "create" && editing.parentId === node.id;
 
-  // Auto-expand when creating a child inside this node
   useEffect(() => {
     if (isCreatingHere && !isExpanded) {
       setIsExpanded(true);
@@ -136,6 +141,7 @@ function TreeNodeComponent({
   }, [isCreatingHere, isExpanded]);
 
   const showChildren = (isExpanded && hasChildren) || isCreatingHere;
+  const count = pageCounts.get(node.id) ?? 0;
 
   return (
     <div>
@@ -176,6 +182,7 @@ function TreeNodeComponent({
               )}
               <span className="tree-icon">{hasChildren ? "📁" : "📂"}</span>
               <span className="tree-label">{node.name}</span>
+              {count > 0 && <span className="tree-count">{count}</span>}
             </button>
             <div className="nav-actions">
               <button title="New subfolder" onClick={() => onStartCreate(node.id)}>
@@ -224,6 +231,7 @@ function TreeNodeComponent({
               onCancelEditing={onCancelEditing}
               editing={editing}
               depth={depth + 1}
+              pageCounts={pageCounts}
             />
           ))}
         </div>
@@ -234,7 +242,11 @@ function TreeNodeComponent({
 
 export function FileTree({
   collections,
+  pageCounts,
   selectedCollectionId,
+  isAllSelected,
+  onSelectAll,
+  onSelectUnsorted,
   onSelect,
   onCreate,
   onRename,
@@ -275,16 +287,32 @@ export function FileTree({
     handleCancelEditing();
   };
 
+  const unsortedCount = pageCounts.get(null) ?? 0;
+  const totalPageCount = Array.from(pageCounts.values()).reduce((sum, c) => sum + c, 0);
+
   return (
     <nav className="sidebar-nav">
+      {/* All Pages */}
       <button
-        className={`nav-item ${selectedCollectionId === null ? "active" : ""}`}
-        onClick={() => onSelect(null)}
+        className={`nav-item ${isAllSelected ? "active" : ""}`}
+        onClick={onSelectAll}
       >
-        <span className="tree-icon">📁</span>
-        <span className="tree-label">Unsorted</span>
+        <span className="tree-icon">📚</span>
+        <span className="tree-label">All Pages</span>
+        {totalPageCount > 0 && <span className="tree-count">{totalPageCount}</span>}
       </button>
 
+      {/* Unsorted */}
+      <button
+        className={`nav-item ${!isAllSelected && selectedCollectionId === null ? "active" : ""}`}
+        onClick={onSelectUnsorted}
+      >
+        <span className="tree-icon">📥</span>
+        <span className="tree-label">Unsorted</span>
+        {unsortedCount > 0 && <span className="tree-count">{unsortedCount}</span>}
+      </button>
+
+      {/* Collections tree */}
       {tree.map((node) => (
         <TreeNodeComponent
           key={node.id}
@@ -301,6 +329,7 @@ export function FileTree({
           onCancelEditing={handleCancelEditing}
           editing={editing}
           depth={0}
+          pageCounts={pageCounts}
         />
       ))}
 

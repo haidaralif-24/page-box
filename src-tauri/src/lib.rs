@@ -7,8 +7,13 @@ use storage::{PageMeta, Version, Tag};
 use tauri::AppHandle;
 
 #[tauri::command]
-fn list_pages(app: AppHandle, collection_id: Option<i64>) -> Result<Vec<PageMeta>, String> {
-    storage::list_pages(&app, collection_id)
+fn list_pages(app: AppHandle, collection_id: Option<i64>, include_all: Option<bool>) -> Result<Vec<PageMeta>, String> {
+    storage::list_pages(&app, collection_id, include_all.unwrap_or(false))
+}
+
+#[tauri::command]
+fn count_pages_per_collection(app: AppHandle) -> Result<Vec<(Option<i64>, i64)>, String> {
+    storage::count_pages_per_collection(&app)
 }
 
 #[tauri::command]
@@ -113,6 +118,7 @@ pub fn run() {
             rename_collection,
             move_collection,
             delete_collection,
+            count_pages_per_collection,
             replace_page,
             list_versions,
             restore_version,

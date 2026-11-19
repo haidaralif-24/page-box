@@ -67,12 +67,34 @@ pub fn add_page(app: &AppHandle, raw_text: &str, collection_id: Option<i64>) -> 
     })
 }
 
-pub fn list_pages(app: &AppHandle, collection_id: Option<i64>) -> Result<Vec<PageMeta>, String> {
+pub fn list_pages(app: &AppHandle, collection_id: Option<i64>, include_all: bool) -> Result<Vec<PageMeta>, String> {
     let conn = db::get_conn(app)?;
     
-    if let Some(cid) = collection_id {
+    if include_all {
+        // "All Pages" view: return every page regardless of collection
         let mut stmt = conn
-            .prepare("SELECT id, collection_id, title, created_at, updated_at FROM pages WHERE collection_id = ?1 ORDER BY created_at DESC")
+            .prepare("SELECT id, collection_id, title, created_at, updated_at FROM pages ORDER BY updated_at DESC")
+            .map_err(|e| format!("could not prepare list pages: {e}"))?;
+
+        let pages = stmt
+            .query_map([], |row| {
+                Ok(PageMeta {
+                    id: row.get(0)?,
+                    collection_id: row.get(1)?,
+                    title: row.get(2)?,
+                    created_at: row.get(3)?,
+                    updated_at: row.get(4)?,
+                })
+            })
+            .map_err(|e| format!("could not query pages: {e}"))?
+            .filter_map(Result::ok)
+            .collect();
+
+        Ok(pages)
+    } else if let Some(cid) = collection_id {
+        // Specific collection view
+        let mut stmt = conn
+            .prepare("SELECT id, collection_id, title, created_at, updated_at FROM pages WHERE collection_id = ?1 ORDER BY updated_at DESC")
             .map_err(|e| format!("could not prepare list pages: {e}"))?;
 
         let pages = stmt
@@ -91,8 +113,9 @@ pub fn list_pages(app: &AppHandle, collection_id: Option<i64>) -> Result<Vec<Pag
 
         Ok(pages)
     } else {
+        // "Unsorted" view: only pages with no collection
         let mut stmt = conn
-            .prepare("SELECT id, collection_id, title, created_at, updated_at FROM pages ORDER BY created_at DESC")
+            .prepare("SELECT id, collection_id, title, created_at, updated_at FROM pages WHERE collection_id IS NULL ORDER BY updated_at DESC")
             .map_err(|e| format!("could not prepare list pages: {e}"))?;
 
         let pages = stmt
@@ -111,6 +134,24 @@ pub fn list_pages(app: &AppHandle, collection_id: Option<i64>) -> Result<Vec<Pag
 
         Ok(pages)
     }
+}
+
+/// Returns a map of collection_id -> page count, plus an entry for `None` (unsorted)
+pub fn count_pages_per_collection(app: &AppHandle) -> Result<Vec<(Option<i64>, i64)>, String> {
+    let conn = db::get_conn(app)?;
+    let mut stmt = conn
+        .prepare("SELECT collection_id, COUNT(*) FROM pages GROUP BY collection_id")
+        .map_err(|e| format!("could not prepare page count query: {e}"))?;
+    
+    let counts = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, Option<i64>>(0)?, row.get::<_, i64>(1)?))
+        })
+        .map_err(|e| format!("could not query page counts: {e}"))?
+        .filter_map(Result::ok)
+        .collect();
+    
+    Ok(counts)
 }
 
 pub fn delete_page(app: &AppHandle, page_id: &str) -> Result<(), String> {

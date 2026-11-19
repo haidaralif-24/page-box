@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   addPage,
   addTag,
+  countPagesPerCollection,
   createCollection,
   deleteCollection,
   deletePage,
@@ -40,10 +41,19 @@ type ConfirmState = {
   onConfirm: () => void | Promise<void>;
 } | null;
 
+/**
+ * SelectedSidebar represents what is currently selected in the sidebar.
+ * - "all"  : Show every page regardless of collection
+ * - null   : "Unsorted" — only pages with no collection
+ * - number : A specific collection id
+ */
+type SelectedSidebar = number | null | "all";
+
 function App() {
   const [pages, setPages] = useState<PageMeta[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [selectedCollectionId, setSelectedCollectionId] = useState<number | null>(null);
+  const [pageCounts, setPageCounts] = useState<Map<number | null, number>>(new Map());
+  const [selectedCollectionId, setSelectedCollectionId] = useState<SelectedSidebar>("all");
   const [view, setView] = useState<View>({ name: "gallery" });
   const [showPaste, setShowPaste] = useState(false);
   const [showReplace, setShowReplace] = useState(false);
@@ -58,12 +68,17 @@ function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [pagesData, collectionsData] = await Promise.all([
-        searchQuery ? searchPages(searchQuery) : listPages(selectedCollectionId),
+      const includeAll = selectedCollectionId === "all";
+      const collectionId = typeof selectedCollectionId === "number" ? selectedCollectionId : null;
+
+      const [pagesData, collectionsData, countsData] = await Promise.all([
+        searchQuery ? searchPages(searchQuery) : listPages(collectionId, includeAll),
         listCollections(),
+        countPagesPerCollection(),
       ]);
       setPages(pagesData);
       setCollections(collectionsData);
+      setPageCounts(new Map(countsData));
       setError(null);
     } catch (e) {
       setError(String(e));
@@ -86,7 +101,8 @@ function App() {
   }
 
   async function handleSave(rawText: string) {
-    const meta = await addPage(rawText, selectedCollectionId);
+    const collectionId = typeof selectedCollectionId === "number" ? selectedCollectionId : null;
+    const meta = await addPage(rawText, collectionId);
     setShowPaste(false);
     await refresh();
     await openPage(meta);
@@ -188,7 +204,7 @@ function App() {
         try {
           await deleteCollection(collection.id);
           if (selectedCollectionId === collection.id) {
-            setSelectedCollectionId(null);
+            setSelectedCollectionId("all");
           }
           await refresh();
         } catch (e) {
@@ -207,12 +223,20 @@ function App() {
     }
   }
 
-  const selectedCollection = collections.find((c) => c.id === selectedCollectionId);
+  const selectedCollection = typeof selectedCollectionId === "number"
+    ? collections.find((c) => c.id === selectedCollectionId)
+    : null;
   const viewTitle = selectedCollection
     ? selectedCollection.name
+    : selectedCollectionId === null
+    ? "Unsorted"
     : searchQuery
     ? `Search: "${searchQuery}"`
     : "All Pages";
+
+  // For FileTree: pass only number | null (never "all")
+  const fileTreeSelectedId = selectedCollectionId === "all" ? null : selectedCollectionId;
+  const isAllSelected = selectedCollectionId === "all";
 
   return (
     <div className="app">
@@ -221,7 +245,7 @@ function App() {
           <button
             className="brand"
             onClick={() => {
-              setSelectedCollectionId(null);
+              setSelectedCollectionId("all");
               setSearchQuery("");
               setView({ name: "gallery" });
             }}
@@ -232,7 +256,17 @@ function App() {
         </div>
         <FileTree
           collections={collections}
-          selectedCollectionId={searchQuery ? null : selectedCollectionId}
+          pageCounts={pageCounts}
+          selectedCollectionId={fileTreeSelectedId}
+          isAllSelected={isAllSelected}
+          onSelectAll={() => {
+            setSelectedCollectionId("all");
+            setSearchQuery("");
+          }}
+          onSelectUnsorted={() => {
+            setSelectedCollectionId(null);
+            setSearchQuery("");
+          }}
           onSelect={(id) => {
             setSelectedCollectionId(id);
             setSearchQuery("");
@@ -310,7 +344,7 @@ function App() {
                 className="btn"
                 onClick={() => setView({ name: "gallery" })}
               >
-                ← Back to {selectedCollection ? selectedCollection.name : "All Pages"}
+                ← Back to {viewTitle}
               </button>
               <h2 className="page-title-small">{view.page.title}</h2>
               <div className="page-toolbar-actions">
