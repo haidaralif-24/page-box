@@ -228,3 +228,14 @@ export async function searchPages(query: string): Promise<PageMeta[]> {
   const q = query.toLowerCase();
   return pages.filter(p => p.title.toLowerCase().includes(q));
 }
+
+export async function copyToClipboard(text: string): Promise<void> {
+  if (isTauri()) {
+    return invoke<void>("copy_to_clipboard", { text });
+  }
+  // Browser fallback
+  if (!navigator.clipboard) {
+    throw new Error("Clipboard API not available");
+  }
+  await navigator.clipboard.writeText(text);
+}

@@ -27,6 +27,7 @@ import { PasteDialog } from "./components/PasteDialog";
 import { ReplaceDialog } from "./components/ReplaceDialog";
 import { PreviewFrame } from "./components/PreviewFrame";
 import { VersionHistory } from "./components/VersionHistory";
+import { CopyForAIDialog } from "./components/CopyForAIDialog";
 import { FileTree } from "./components/FileTree";
 import { ConfirmDialog, Toast } from "./components/ConfirmDialog";
 import { RefreshIcon, ClockIcon, CopyIcon, TrashIcon } from "./components/Icons";
@@ -59,6 +60,7 @@ function App() {
   const [showPaste, setShowPaste] = useState(false);
   const [showReplace, setShowReplace] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showCopyForAI, setShowCopyForAI] = useState(false);
   const [tags, setTags] = useState<Tag[]>([]);
   const [newTagInput, setNewTagInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -147,13 +149,7 @@ function App() {
 
   async function handleCopyForAI() {
     if (view.name !== "page") return;
-    try {
-      const html = await getPageHtml(view.page.id);
-      await navigator.clipboard.writeText(html);
-      setToast("HTML copied to clipboard!");
-    } catch (e) {
-      setError("Failed to copy: " + String(e));
-    }
+    setShowCopyForAI(true);
   }
 
   async function handleAddTag() {
@@ -417,7 +413,11 @@ function App() {
         )}
 
         {showPaste && (
-          <PasteDialog onSave={handleSave} onClose={() => setShowPaste(false)} />
+          <PasteDialog
+            onSave={handleSave}
+            onClose={() => setShowPaste(false)}
+            onCopied={(msg) => setToast(msg)}
+          />
         )}
         {showReplace && view.name === "page" && (
           <ReplaceDialog
@@ -446,6 +446,15 @@ function App() {
                 },
               });
             }}
+          />
+        )}
+
+        {showCopyForAI && view.name === "page" && (
+          <CopyForAIDialog
+            html={view.html}
+            pageTitle={view.page.title}
+            onClose={() => setShowCopyForAI(false)}
+            onCopied={(msg) => setToast(msg)}
           />
         )}
 

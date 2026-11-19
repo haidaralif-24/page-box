@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cleanInput } from "../lib/cleaning";
+import { GenerateHTMLPromptDialog } from "./GenerateHTMLPromptDialog";
+import { SparklesIcon } from "./Icons";
 
 interface PasteDialogProps {
   onSave: (rawText: string) => Promise<void>;
   onClose: () => void;
+  onCopied?: (message: string) => void;
 }
 
-export function PasteDialog({ onSave, onClose }: PasteDialogProps) {
+export function PasteDialog({ onSave, onClose, onCopied }: PasteDialogProps) {
   const [raw, setRaw] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showGenerate, setShowGenerate] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const cleaned = useMemo(() => cleanInput(raw), [raw]);
@@ -48,9 +52,27 @@ export function PasteDialog({ onSave, onClose }: PasteDialogProps) {
     >
       <div className="dialog" role="dialog" aria-modal="true" aria-label="Add a page">
         <h2>Add a page</h2>
+
+        <button
+          type="button"
+          className="generate-prompt-btn"
+          onClick={() => setShowGenerate(true)}
+        >
+          <SparklesIcon size={16} />
+          <div className="generate-prompt-text">
+            <span className="generate-prompt-title">
+              Need HTML? Generate a prompt for AI
+            </span>
+            <span className="generate-prompt-hint">
+              Describe what you want to learn and get a ready-made interactive
+              lesson.
+            </span>
+          </div>
+        </button>
+
         <p className="dialog-hint">
-          Paste whatever your AI tool gave you. Code fences and extra prose are
-          cleaned up automatically.
+          Or paste the HTML your AI tool gave you. Code fences and extra prose
+          are cleaned up automatically.
         </p>
         <textarea
           ref={textareaRef}
@@ -91,6 +113,13 @@ export function PasteDialog({ onSave, onClose }: PasteDialogProps) {
         </div>
         <p className="dialog-shortcut">Ctrl+Enter to save · Esc to close</p>
       </div>
+
+      {showGenerate && (
+        <GenerateHTMLPromptDialog
+          onClose={() => setShowGenerate(false)}
+          onCopied={(msg) => onCopied?.(msg)}
+        />
+      )}
     </div>
   );
 }

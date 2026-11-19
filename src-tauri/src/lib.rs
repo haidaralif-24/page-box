@@ -103,6 +103,14 @@ fn search_pages(app: AppHandle, query: String) -> Result<Vec<PageMeta>, String> 
     storage::search_pages(&app, &query)
 }
 
+#[tauri::command]
+fn copy_to_clipboard(text: String) -> Result<(), String> {
+    use arboard::Clipboard;
+    let mut clipboard = Clipboard::new().map_err(|e| format!("could not open clipboard: {e}"))?;
+    clipboard.set_text(text).map_err(|e| format!("could not write to clipboard: {e}"))?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -125,7 +133,8 @@ pub fn run() {
             add_tag,
             remove_tag,
             list_tags_for_page,
-            search_pages
+            search_pages,
+            copy_to_clipboard
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
