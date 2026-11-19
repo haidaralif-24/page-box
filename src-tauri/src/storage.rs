@@ -41,22 +41,28 @@ pub fn add_page(app: &AppHandle, raw_text: &str, collection_id: Option<i64>) -> 
     let id = Uuid::new_v4().to_string();
     let now = now_millis();
     
-    let conn = db::get_conn(app)?;
-    conn.execute(
+    // Page + initial version + pointer must succeed or fail together, so a
+    // failed version insert can never leave an orphan page behind.
+    let mut conn = db::get_conn(app)?;
+    let tx = conn.transaction().map_err(|e| format!("could not start transaction: {e}"))?;
+
+    tx.execute(
         "INSERT INTO pages (id, collection_id, title, content, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         rusqlite::params![id, collection_id, cleaned.title, cleaned.html, now, now],
     ).map_err(|e| format!("could not save page to db: {e}"))?;
 
-    conn.execute(
+    tx.execute(
         "INSERT INTO versions (page_id, content, created_at) VALUES (?1, ?2, ?3)",
         rusqlite::params![id, cleaned.html, now],
     ).map_err(|e| format!("could not save initial version: {e}"))?;
-    
-    let version_id = conn.last_insert_rowid();
-    conn.execute(
+
+    let version_id = tx.last_insert_rowid();
+    tx.execute(
         "UPDATE pages SET current_version_id = ?1 WHERE id = ?2",
         rusqlite::params![version_id, id],
     ).map_err(|e| format!("could not update page version: {e}"))?;
+
+    tx.commit().map_err(|e| format!("could not commit new page: {e}"))?;
 
     Ok(PageMeta {
         id: id.clone(),
@@ -172,11 +178,12 @@ pub struct Version {
 pub fn replace_page(app: &AppHandle, page_id: &str, raw_text: &str) -> Result<PageMeta, String> {
     validate_page_id(page_id)?;
     let cleaned = cleaning::clean_input(raw_text);
-    let conn = db::get_conn(app)?;
+    let mut conn = db::get_conn(app)?;
+    let tx = conn.transaction().map_err(|e| format!("could not start transaction: {e}"))?;
     let now = now_millis();
     
     // Read existing metadata before updating
-    let existing: (Option<i64>, u64) = conn
+    let existing: (Option<i64>, u64) = tx
         .query_row(
             "SELECT collection_id, created_at FROM pages WHERE id = ?1",
             rusqlite::params![page_id],
@@ -184,16 +191,18 @@ pub fn replace_page(app: &AppHandle, page_id: &str, raw_text: &str) -> Result<Pa
         )
         .map_err(|e| format!("could not read existing page: {e}"))?;
 
-    conn.execute(
+    tx.execute(
         "INSERT INTO versions (page_id, content, created_at) VALUES (?1, ?2, ?3)",
         rusqlite::params![page_id, cleaned.html, now],
     ).map_err(|e| format!("could not save version: {e}"))?;
-    let version_id = conn.last_insert_rowid();
+    let version_id = tx.last_insert_rowid();
     
-    conn.execute(
+    tx.execute(
         "UPDATE pages SET current_version_id = ?1, updated_at = ?2, title = ?3, content = ?4 WHERE id = ?5",
         rusqlite::params![version_id, now, cleaned.title, cleaned.html, page_id],
     ).map_err(|e| format!("could not update page: {e}"))?;
+
+    tx.commit().map_err(|e| format!("could not commit replacement: {e}"))?;
     
     Ok(PageMeta {
         id: page_id.to_string(),
@@ -250,9 +259,10 @@ pub fn list_versions(app: &AppHandle, page_id: &str) -> Result<Vec<Version>, Str
 
 pub fn restore_version(app: &AppHandle, page_id: &str, version_id: i64) -> Result<(), String> {
     validate_page_id(page_id)?;
-    let conn = db::get_conn(app)?;
+    let mut conn = db::get_conn(app)?;
+    let tx = conn.transaction().map_err(|e| format!("could not start transaction: {e}"))?;
     
-    let content: String = conn.query_row(
+    let content: String = tx.query_row(
         "SELECT content FROM versions WHERE id = ?1 AND page_id = ?2",
         rusqlite::params![version_id, page_id],
         |row| row.get(0)
@@ -260,16 +270,18 @@ pub fn restore_version(app: &AppHandle, page_id: &str, version_id: i64) -> Resul
     
     let now = now_millis();
     
-    conn.execute(
+    tx.execute(
         "INSERT INTO versions (page_id, content, created_at) VALUES (?1, ?2, ?3)",
         rusqlite::params![page_id, content, now],
     ).map_err(|e| format!("could not save restored version record: {e}"))?;
-    let new_version_id = conn.last_insert_rowid();
+    let new_version_id = tx.last_insert_rowid();
     
-    conn.execute(
+    tx.execute(
         "UPDATE pages SET current_version_id = ?1, updated_at = ?2, content = ?3 WHERE id = ?4",
         rusqlite::params![new_version_id, now, content, page_id],
     ).map_err(|e| format!("could not update page: {e}"))?;
+
+    tx.commit().map_err(|e| format!("could not commit restore: {e}"))?;
     
     Ok(())
 }

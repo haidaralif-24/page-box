@@ -15,6 +15,131 @@ fn db_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("app.db"))
 }
 
+fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool, String> {
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
+            params![table, column],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("could not inspect {table}.{column}: {e}"))?;
+    Ok(count > 0)
+}
+
+/// ALTER TABLE ADD COLUMN, skipped when the column already exists.
+/// `table`, `column` and `declaration` are internal constants, never user input.
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    declaration: &str,
+) -> Result<(), String> {
+    if !column_exists(conn, table, column)? {
+        conn.execute(
+            &format!("ALTER TABLE {table} ADD COLUMN {column} {declaration}"),
+            [],
+        )
+        .map_err(|e| format!("could not add {column} column to {table}: {e}"))?;
+    }
+    Ok(())
+}
+
+/// The legacy (v0.3) `versions` table stored `file_path TEXT NOT NULL` instead of
+/// `content`. A plain ADD COLUMN is not enough: the old NOT NULL `file_path`
+/// would reject every new insert. Rebuild the table with the current schema,
+/// recovering each old version's HTML from its file where possible.
+fn rebuild_legacy_versions(app: &AppHandle, conn: &Connection) -> Result<(), String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("could not resolve app data directory: {e}"))?;
+
+    conn.execute_batch("BEGIN;")
+        .map_err(|e| format!("could not begin versions migration: {e}"))?;
+
+    let result = (|| -> Result<(), String> {
+        conn.execute(
+            "CREATE TABLE versions_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                page_id TEXT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+                content TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );",
+            [],
+        )
+        .map_err(|e| format!("could not create versions_new: {e}"))?;
+
+        let mut stmt = conn
+            .prepare("SELECT id, page_id, file_path, created_at FROM versions")
+            .map_err(|e| format!("could not read legacy versions: {e}"))?;
+        let rows: Vec<(i64, String, String, i64)> = stmt
+            .query_map([], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })
+            .map_err(|e| format!("could not query legacy versions: {e}"))?
+            .filter_map(Result::ok)
+            .collect();
+
+        for (id, page_id, file_path, created_at) in rows {
+            let content = fs::read_to_string(&file_path)
+                .or_else(|_| fs::read_to_string(data_dir.join(&file_path)))
+                .unwrap_or_default();
+            conn.execute(
+                "INSERT INTO versions_new (id, page_id, content, created_at) VALUES (?1, ?2, ?3, ?4)",
+                params![id, page_id, content, created_at],
+            )
+            .map_err(|e| format!("could not copy legacy version {id}: {e}"))?;
+        }
+
+        conn.execute("DROP TABLE versions", [])
+            .map_err(|e| format!("could not drop legacy versions: {e}"))?;
+        conn.execute("ALTER TABLE versions_new RENAME TO versions", [])
+            .map_err(|e| format!("could not rename versions_new: {e}"))?;
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")
+                .map_err(|e| format!("could not commit versions migration: {e}"))?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
+}
+
+/// Repair pages whose version row was never written (e.g. saves that failed
+/// halfway on the old schema): give every non-empty page an initial version,
+/// and point `current_version_id` at the newest version when it is unset.
+fn repair_page_versions(conn: &Connection) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO versions (page_id, content, created_at)
+         SELECT p.id, p.content, p.created_at
+         FROM pages p
+         WHERE p.content <> ''
+           AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.page_id = p.id)",
+        [],
+    )
+    .map_err(|e| format!("could not create missing initial versions: {e}"))?;
+
+    conn.execute(
+        "UPDATE pages
+         SET current_version_id = (
+             SELECT v.id FROM versions v
+             WHERE v.page_id = pages.id
+             ORDER BY v.created_at DESC, v.id DESC
+             LIMIT 1
+         )
+         WHERE current_version_id IS NULL",
+        [],
+    )
+    .map_err(|e| format!("could not set current_version_id: {e}"))?;
+    Ok(())
+}
+
 pub fn init_db(app: &AppHandle) -> Result<Connection, String> {
     let path = db_path(app)?;
     let conn = Connection::open(&path).map_err(|e| format!("could not open database: {e}"))?;
@@ -22,6 +147,8 @@ pub fn init_db(app: &AppHandle) -> Result<Connection, String> {
     conn.execute("PRAGMA foreign_keys = ON;", [])
         .map_err(|e| format!("could not enable foreign keys: {e}"))?;
 
+    // 1. Create every table with the CURRENT schema first. On existing databases
+    //    these are no-ops; the migrations below bring old tables up to date.
     conn.execute(
         "CREATE TABLE IF NOT EXISTS collections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,97 +173,6 @@ pub fn init_db(app: &AppHandle) -> Result<Connection, String> {
         [],
     )
     .map_err(|e| format!("could not create pages table: {e}"))?;
-
-    // Migration: Add 'content' column to 'pages' table if it doesn't exist (for existing databases)
-    let has_content: bool = conn
-        .query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('pages') WHERE name='content'",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .map_err(|e| format!("could not check for content column: {e}"))?
-        > 0;
-
-    if !has_content {
-        conn.execute(
-            "ALTER TABLE pages ADD COLUMN content TEXT NOT NULL DEFAULT ''",
-            [],
-        )
-        .map_err(|e| format!("could not add content column to pages table: {e}"))?;
-    }
-
-    // Backfill: Populate content from old pages/<id>/current.html files for pages with empty content.
-    // This handles the case where the content column was added via ALTER TABLE on an existing database,
-    // giving all existing rows empty strings instead of their actual HTML.
-    let empty_content_count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM pages WHERE content = '' OR content IS NULL",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .map_err(|e| format!("could not count empty content pages: {e}"))?;
-
-    if empty_content_count > 0 {
-        let old_pages_dir = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("could not resolve app data directory: {e}"))?
-            .join("pages");
-
-        if old_pages_dir.exists() {
-            let mut stmt = conn
-                .prepare("SELECT id FROM pages WHERE content = '' OR content IS NULL")
-                .map_err(|e| format!("could not prepare empty content pages: {e}"))?;
-
-            let page_ids: Vec<String> = stmt
-                .query_map([], |row| row.get::<_, String>(0))
-                .map_err(|e| format!("could not query empty content pages: {e}"))?
-                .filter_map(Result::ok)
-                .collect();
-
-            for page_id in page_ids {
-                let html_path = old_pages_dir.join(&page_id).join("current.html");
-                if let Ok(html) = fs::read_to_string(&html_path) {
-                    if !html.is_empty() {
-                        let _ = conn.execute(
-                            "UPDATE pages SET content = ?1 WHERE id = ?2",
-                            rusqlite::params![html, page_id],
-                        );
-
-                        // Also create an initial version if none exists
-                        let version_count: i64 = conn
-                            .query_row(
-                                "SELECT COUNT(*) FROM versions WHERE page_id = ?1",
-                                rusqlite::params![page_id],
-                                |row| row.get(0),
-                            )
-                            .unwrap_or(0);
-
-                        if version_count == 0 {
-                            let created_at: u64 = conn
-                                .query_row(
-                                    "SELECT created_at FROM pages WHERE id = ?1",
-                                    rusqlite::params![page_id],
-                                    |row| row.get(0),
-                                )
-                                .unwrap_or(0);
-
-                            let _ = conn.execute(
-                                "INSERT INTO versions (page_id, content, created_at) VALUES (?1, ?2, ?3)",
-                                rusqlite::params![page_id, html, created_at],
-                            );
-
-                            let version_id = conn.last_insert_rowid();
-                            let _ = conn.execute(
-                                "UPDATE pages SET current_version_id = ?1 WHERE id = ?2 AND current_version_id IS NULL",
-                                rusqlite::params![version_id, page_id],
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS versions (
@@ -168,6 +204,66 @@ pub fn init_db(app: &AppHandle) -> Result<Connection, String> {
     )
     .map_err(|e| format!("could not create page_tags table: {e}"))?;
 
+    // 2. Column migrations for databases created by older versions.
+    add_column_if_missing(&conn, "pages", "content", "TEXT NOT NULL DEFAULT ''")?;
+
+    if !column_exists(&conn, "versions", "content")? {
+        rebuild_legacy_versions(app, &conn)?;
+    }
+
+    add_column_if_missing(
+        &conn,
+        "pages",
+        "current_version_id",
+        "INTEGER REFERENCES versions(id) ON DELETE SET NULL",
+    )?;
+
+    // 3. Backfill pages.content from old pages/<id>/current.html files for pages
+    //    with empty content (databases where the content column was just added).
+    let empty_content_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pages WHERE content = '' OR content IS NULL",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("could not count empty content pages: {e}"))?;
+
+    if empty_content_count > 0 {
+        let old_pages_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("could not resolve app data directory: {e}"))?
+            .join("pages");
+
+        if old_pages_dir.exists() {
+            let mut stmt = conn
+                .prepare("SELECT id FROM pages WHERE content = '' OR content IS NULL")
+                .map_err(|e| format!("could not prepare empty content pages: {e}"))?;
+
+            let page_ids: Vec<String> = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| format!("could not query empty content pages: {e}"))?
+                .filter_map(Result::ok)
+                .collect();
+
+            for page_id in page_ids {
+                let html_path = old_pages_dir.join(&page_id).join("current.html");
+                if let Ok(html) = fs::read_to_string(&html_path) {
+                    if !html.is_empty() {
+                        let _ = conn.execute(
+                            "UPDATE pages SET content = ?1 WHERE id = ?2",
+                            params![html, page_id],
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. Every non-empty page gets a version row and a current_version_id.
+    repair_page_versions(&conn)?;
+
+    // 5. Legacy JSON/file-based migration (only when the DB has no pages yet).
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM pages", [], |row| row.get(0))
         .map_err(|e| format!("could not count pages: {e}"))?;
@@ -297,11 +393,11 @@ pub fn list_collections(app: &AppHandle) -> Result<Vec<Collection>, String> {
     Ok(collections)
 }
 
-pub fn rename_collection(app: &AppHandle, id: i64, name: &str) -> Result<(), String> {
+pub fn rename_collection(app: &AppHandle, id: i64, new_name: &str) -> Result<(), String> {
     let conn = get_conn(app)?;
     conn.execute(
         "UPDATE collections SET name = ?1 WHERE id = ?2",
-        params![name, id],
+        params![new_name, id],
     )
     .map_err(|e| format!("could not rename collection: {e}"))?;
     Ok(())
