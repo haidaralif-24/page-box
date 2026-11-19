@@ -38,7 +38,7 @@ pub fn init_db(app: &AppHandle) -> Result<Connection, String> {
             id TEXT PRIMARY KEY,
             collection_id INTEGER REFERENCES collections(id) ON DELETE SET NULL,
             title TEXT NOT NULL,
-            content TEXT NOT NULL,
+            content TEXT NOT NULL DEFAULT '',
             current_version_id INTEGER REFERENCES versions(id) ON DELETE SET NULL,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
@@ -46,6 +46,24 @@ pub fn init_db(app: &AppHandle) -> Result<Connection, String> {
         [],
     )
     .map_err(|e| format!("could not create pages table: {e}"))?;
+
+    // Migration: Add 'content' column to 'pages' table if it doesn't exist (for existing databases)
+    let has_content: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('pages') WHERE name='content'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| format!("could not check for content column: {e}"))?
+        > 0;
+
+    if !has_content {
+        conn.execute(
+            "ALTER TABLE pages ADD COLUMN content TEXT NOT NULL DEFAULT ''",
+            [],
+        )
+        .map_err(|e| format!("could not add content column to pages table: {e}"))?;
+    }
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS versions (
