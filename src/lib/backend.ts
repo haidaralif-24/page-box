@@ -15,7 +15,6 @@ export interface PageMeta {
   id: string;
   collectionId: number | null;
   title: string;
-  fileName: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -24,14 +23,12 @@ export interface Collection {
   id: number;
   parentId: number | null;
   name: string;
-  relPath: string;
   createdAt: string;
 }
 
 export interface Version {
   id: number;
   pageId: string;
-  fileName: string;
   createdAt: number;
 }
 
@@ -89,12 +86,10 @@ export async function addPage(rawText: string, collectionId?: number | null): Pr
   if (isTauri()) return invoke<PageMeta>("add_page", { rawText, collectionId });
   const cleaned = cleanInput(rawText);
   const now = Date.now();
-  const slug = cleaned.title.toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   const meta: PageMeta = {
     id: crypto.randomUUID(),
     collectionId: collectionId ?? null,
     title: cleaned.title,
-    fileName: `${slug || "untitled"}.html`,
     createdAt: now,
     updatedAt: now,
   };
@@ -119,9 +114,8 @@ export async function movePage(pageId: string, collectionId: number | null): Pro
 
 export async function renamePage(pageId: string, title: string): Promise<void> {
   if (isTauri()) return invoke<void>("rename_page", { pageId, title });
-  const slug = title.toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   const pages = mockListPages().map(p =>
-    p.id === pageId ? { ...p, title, fileName: `${slug || "untitled"}.html`, updatedAt: Date.now() } : p
+    p.id === pageId ? { ...p, title, updatedAt: Date.now() } : p
   );
   mockSavePages(pages);
 }
@@ -134,15 +128,11 @@ export async function listCollections(): Promise<Collection[]> {
 export async function createCollection(name: string, parentId: number | null = null): Promise<Collection> {
   if (isTauri()) return invoke<Collection>("create_collection", { name, parentId });
   const collections = mockListCollections();
-  const parent = parentId ? collections.find(c => c.id === parentId) : null;
-  const slug = name.toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-  const relPath = parent ? `${parent.relPath}/${slug}` : slug;
   
   const newCollection: Collection = {
     id: Math.max(0, ...collections.map(c => c.id)) + 1,
     parentId,
     name,
-    relPath,
     createdAt: new Date().toISOString(),
   };
   mockSaveCollections([...collections, newCollection]);
