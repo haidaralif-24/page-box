@@ -16,12 +16,20 @@ jobs:
         include:
           - platform: macos-latest   # Apple Silicon
             args: --target aarch64-apple-darwin
+            target_dir: aarch64-apple-darwin
+            zip_label: macos-arm64
           - platform: macos-latest   # Intel
             args: --target x86_64-apple-darwin
+            target_dir: x86_64-apple-darwin
+            zip_label: macos-x64
           - platform: ubuntu-22.04
             args: ''
+            target_dir: ''
+            zip_label: ''
           - platform: windows-latest
             args: ''
+            target_dir: ''
+            zip_label: windows-x64
 
     runs-on: ${{ matrix.platform }}
 
@@ -67,7 +75,66 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Page Box ${{ github.ref_name }}'
-          releaseBody: 'See the assets below to download the installer for your OS.'
+          releaseBody: |
+            Installers and portable ZIPs are attached below.
+            On managed school laptops where installers / disk images are blocked, download the portable ZIP for your OS:
+            - macOS (Apple Silicon): Pagebox-<version>-macos-arm64.zip
+            - macOS (Intel): Pagebox-<version>-macos-x64.zip
+            - Windows: Pagebox-<version>-windows-x64-portable.zip (see README.txt inside)
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      # ------------------------------------------------------------------
+      # Portable ZIPs: no DMG to mount, no installer to run.
+      # Note: this does NOT remove Gatekeeper/SmartScreen checks on unsigned
+      # apps. Long-term fix is code signing + notarization, or having IT
+      # allowlist / deploy the app via MDM.
+      # ------------------------------------------------------------------
+
+      - name: Zip macOS .app (portable)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          set -euo pipefail
+          APP="src-tauri/target/${{ matrix.target_dir }}/release/bundle/macos/Pagebox.app"
+          test -d "$APP" || { echo "App bundle not found at $APP"; exit 1; }
+          mkdir -p artifacts
+          # ditto (not plain zip) preserves symlinks, permissions and metadata
+          # inside the .app bundle so it still launches after extraction.
+          ditto -c -k --keepParent "$APP" "artifacts/Pagebox-${{ github.ref_name }}-${{ matrix.zip_label }}.zip"
+
+      - name: Zip Windows portable exe
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem "src-tauri/target/release/*.exe" -File |
+                 Where-Object { $_.Name -notlike "*uninstall*" } |
+                 Select-Object -First 1
+          if (-not $exe) { throw "No built exe found in src-tauri/target/release" }
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          @"
+          Pagebox (portable build)
+          ========================
+          1. Extract this ZIP somewhere you can write (Desktop, Downloads, ...).
+          2. Double-click Pagebox.exe - no installation needed.
+          3. If Windows SmartScreen appears: click "More info" -> "Run anyway".
+             The app is not code-signed yet. If your school device blocks it
+             entirely, ask IT to allowlist it - do not try to work around it.
+
+          Requirements: Windows 10/11 with the Microsoft Edge WebView2 Runtime
+          (preinstalled on virtually all managed school PCs).
+
+          Your notes are stored per-user under %APPDATA%\com.pagebox.app, so
+          keep using the same Windows account.
+          "@ | Set-Content -Path "artifacts/README.txt" -Encoding utf8
+          Compress-Archive -Path $exe.FullName, "artifacts/README.txt" `
+            -DestinationPath "artifacts/Pagebox-${{ github.ref_name }}-${{ matrix.zip_label }}-portable.zip"
+
+      - name: Upload ZIPs to the draft release
+        if: matrix.platform != 'ubuntu-22.04'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          files: artifacts/*.zip
+          fail_on_unmatched_files: true
