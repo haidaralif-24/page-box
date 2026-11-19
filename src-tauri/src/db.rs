@@ -1,8 +1,5 @@
-//! SQLite database setup and migrations (ARCHITECTURE.md).
-//!
-//! v0.4 revised: Purely virtual directory structure.
-//! All data (HTML content, versions, tags) is stored in SQLite.
-//! No actual files are written to disk.
+//! SQLite database setup and migrations.
+//! v0.4 revised: Purely virtual directory structure. All data is stored in SQLite.
 
 use rusqlite::{params, Connection};
 use std::fs;
@@ -111,9 +108,7 @@ fn migrate_from_json(app: &AppHandle, conn: &Connection) -> Result<(), String> {
         updated_at: u64,
     }
 
-    let entries = fs::read_dir(&old_pages_dir).map_err(|e| format!("could not read old pages dir: {e}"))?;
-
-    for entry in entries {
+    for entry in fs::read_dir(&old_pages_dir).map_err(|e| format!("could not read old pages dir: {e}"))? {
         let Ok(entry) = entry else { continue };
         let path = entry.path();
         if !path.is_dir() {
@@ -170,7 +165,6 @@ pub struct Collection {
 
 pub fn create_collection(app: &AppHandle, name: &str, parent_id: Option<i64>) -> Result<Collection, String> {
     let conn = get_conn(app)?;
-
     conn.execute(
         "INSERT INTO collections (parent_id, name) VALUES (?1, ?2)",
         params![parent_id, name],
@@ -242,23 +236,19 @@ pub fn delete_collection(app: &AppHandle, id: i64) -> Result<(), String> {
 pub fn move_page(app: &AppHandle, page_id: &str, new_collection_id: Option<i64>) -> Result<(), String> {
     let conn = get_conn(app)?;
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
-    
     conn.execute(
         "UPDATE pages SET collection_id = ?1, updated_at = ?2 WHERE id = ?3",
         rusqlite::params![new_collection_id, now, page_id],
     ).map_err(|e| format!("could not move page in db: {e}"))?;
-
     Ok(())
 }
 
 pub fn rename_page(app: &AppHandle, page_id: &str, new_title: &str) -> Result<(), String> {
     let conn = get_conn(app)?;
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
-    
     conn.execute(
         "UPDATE pages SET title = ?1, updated_at = ?2 WHERE id = ?3",
         rusqlite::params![new_title, now, page_id],
     ).map_err(|e| format!("could not rename page in db: {e}"))?;
-
     Ok(())
 }
