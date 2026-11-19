@@ -1,16 +1,14 @@
-//! Local file storage for pages (ARCHITECTURE.md).
+//! Local file storage for pages + SQLite metadata (ARCHITECTURE.md).
 //!
-//! v0.1 layout (pre-SQLite):
+//! v0.2 layout:
 //!
 //! ```text
-//! <app-data>/pages/<page-id>/
-//!   meta.json      # { id, title, createdAt, updatedAt }
-//!   current.html   # the page's current HTML
+//! <app-data>/
+//!   app.db           # SQLite database (metadata)
+//!   pages/
+//!     <page-id>/
+//!       current.html # the page's current HTML
 //! ```
-//!
-//! SQLite arrives in v0.2; `meta.json` files migrate into it then.
-//! Paths are always built from backend-generated UUIDs, never from page
-//! content or user-typed strings (SECURITY.md defense 6).
 
 use std::fs;
 use std::path::PathBuf;
@@ -21,11 +19,13 @@ use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
 use crate::cleaning;
+use crate::db;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PageMeta {
     pub id: String,
+    pub collection_id: Option<i64>,
     pub title: String,
     pub created_at: u64,
     pub updated_at: u64,
@@ -58,60 +58,336 @@ fn validate_page_id(id: &str) -> Result<(), String> {
     }
 }
 
-pub fn add_page(app: &AppHandle, raw_text: &str) -> Result<PageMeta, String> {
+pub fn add_page(app: &AppHandle, raw_text: &str, collection_id: Option<i64>) -> Result<PageMeta, String> {
     let cleaned = cleaning::clean_input(raw_text);
     let id = Uuid::new_v4().to_string();
     let dir = pages_dir(app)?.join(&id);
     fs::create_dir_all(&dir).map_err(|e| format!("could not create page directory: {e}"))?;
-    // Write the HTML first, then meta.json: a directory only counts as a page
+    
+    // Write the HTML first, then meta to DB: a directory only counts as a page
     // once its metadata is committed.
     fs::write(dir.join("current.html"), &cleaned.html)
         .map_err(|e| format!("could not save page HTML: {e}"))?;
+        
     let now = now_millis();
-    let meta = PageMeta {
-        id,
+    
+    let conn = db::get_conn(app)?;
+    conn.execute(
+        "INSERT INTO pages (id, collection_id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![id, collection_id, cleaned.title, now, now],
+    ).map_err(|e| format!("could not save page metadata to db: {e}"))?;
+
+    Ok(PageMeta {
+        id: id.clone(),
+        collection_id,
         title: cleaned.title,
         created_at: now,
         updated_at: now,
-    };
-    let json = serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?;
-    fs::write(dir.join("meta.json"), json).map_err(|e| format!("could not save page metadata: {e}"))?;
-    Ok(meta)
+    })
 }
 
-pub fn list_pages(app: &AppHandle) -> Result<Vec<PageMeta>, String> {
-    let dir = pages_dir(app)?;
-    let entries = fs::read_dir(&dir).map_err(|e| format!("could not list pages: {e}"))?;
-    let mut pages = Vec::new();
-    for entry in entries {
-        let Ok(entry) = entry else { continue };
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-        let Ok(data) = fs::read_to_string(path.join("meta.json")) else {
-            continue; // not a page directory (or mid-write); skip
-        };
-        let Ok(meta) = serde_json::from_str::<PageMeta>(&data) else {
-            continue;
-        };
-        pages.push(meta);
+pub fn list_pages(app: &AppHandle, collection_id: Option<i64>) -> Result<Vec<PageMeta>, String> {
+    let conn = db::get_conn(app)?;
+    
+    if let Some(cid) = collection_id {
+        let mut stmt = conn
+            .prepare("SELECT id, collection_id, title, created_at, updated_at FROM pages WHERE collection_id = ?1 ORDER BY created_at DESC")
+            .map_err(|e| format!("could not prepare list pages: {e}"))?;
+
+        let pages = stmt
+            .query_map(rusqlite::params![cid], |row| {
+                Ok(PageMeta {
+                    id: row.get(0)?,
+                    collection_id: row.get(1)?,
+                    title: row.get(2)?,
+                    created_at: row.get(3)?,
+                    updated_at: row.get(4)?,
+                })
+            })
+            .map_err(|e| format!("could not query pages: {e}"))?
+            .filter_map(Result::ok)
+            .collect();
+
+        Ok(pages)
+    } else {
+        let mut stmt = conn
+            .prepare("SELECT id, collection_id, title, created_at, updated_at FROM pages ORDER BY created_at DESC")
+            .map_err(|e| format!("could not prepare list pages: {e}"))?;
+
+        let pages = stmt
+            .query_map([], |row| {
+                Ok(PageMeta {
+                    id: row.get(0)?,
+                    collection_id: row.get(1)?,
+                    title: row.get(2)?,
+                    created_at: row.get(3)?,
+                    updated_at: row.get(4)?,
+                })
+            })
+            .map_err(|e| format!("could not query pages: {e}"))?
+            .filter_map(Result::ok)
+            .collect();
+
+        Ok(pages)
     }
-    pages.sort_by(|a, b| b.created_at.cmp(&a.created_at)); // newest first
-    Ok(pages)
-}
-
-pub fn get_page_html(app: &AppHandle, page_id: &str) -> Result<String, String> {
-    validate_page_id(page_id)?;
-    let path = pages_dir(app)?.join(page_id).join("current.html");
-    fs::read_to_string(&path).map_err(|e| format!("could not read page: {e}"))
 }
 
 pub fn delete_page(app: &AppHandle, page_id: &str) -> Result<(), String> {
     validate_page_id(page_id)?;
+    
+    // Delete from DB first
+    let conn = db::get_conn(app)?;
+    conn.execute("DELETE FROM pages WHERE id = ?1", rusqlite::params![page_id])
+        .map_err(|e| format!("could not delete page from db: {e}"))?;
+        
+    // Then delete directory
     let dir = pages_dir(app)?.join(page_id);
-    if !dir.exists() {
-        return Err("page not found".to_string());
+    if dir.exists() {
+        fs::remove_dir_all(&dir).map_err(|e| format!("could not delete page directory: {e}"))?;
     }
-    fs::remove_dir_all(&dir).map_err(|e| format!("could not delete page: {e}"))
+    
+    Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Version {
+    pub id: i64,
+    pub page_id: String,
+    pub file_path: String,
+    pub created_at: u64,
+}
+
+pub fn replace_page(app: &AppHandle, page_id: &str, raw_text: &str) -> Result<PageMeta, String> {
+    validate_page_id(page_id)?;
+    let cleaned = cleaning::clean_input(raw_text);
+    let conn = db::get_conn(app)?;
+    
+    // Get current page info (we just check it exists, title is updated later)
+    let _exists: String = conn.query_row(
+        "SELECT title FROM pages WHERE id = ?1",
+        rusqlite::params![page_id],
+        |row| row.get(0)
+    ).map_err(|e| format!("could not get page info: {e}"))?;
+    
+    // Generate new version file name
+    let now = now_millis();
+    let version_file = format!("{}.html", now);
+    let dir = pages_dir(app)?.join(page_id);
+    fs::create_dir_all(&dir).map_err(|e| format!("could not create page directory: {e}"))?;
+    
+    // Write new version
+    fs::write(dir.join(&version_file), &cleaned.html)
+        .map_err(|e| format!("could not save version HTML: {e}"))?;
+    
+    // Also update current.html for easy access
+    fs::write(dir.join("current.html"), &cleaned.html)
+        .map_err(|e| format!("could not update current.html: {e}"))?;
+    
+    // Insert version record
+    conn.execute(
+        "INSERT INTO versions (page_id, file_path, created_at) VALUES (?1, ?2, ?3)",
+        rusqlite::params![page_id, version_file, now],
+    ).map_err(|e| format!("could not save version: {e}"))?;
+    
+    let version_id = conn.last_insert_rowid();
+    
+    // Update page with new current_version_id and updated_at
+    conn.execute(
+        "UPDATE pages SET current_version_id = ?1, updated_at = ?2, title = ?3 WHERE id = ?4",
+        rusqlite::params![version_id, now, cleaned.title, page_id],
+    ).map_err(|e| format!("could not update page: {e}"))?;
+    
+    Ok(PageMeta {
+        id: page_id.to_string(),
+        collection_id: None, // Will be fetched separately if needed
+        title: cleaned.title,
+        created_at: now, // Simplified for return
+        updated_at: now,
+    })
+}
+
+pub fn get_page_html(app: &AppHandle, page_id: &str, version_id: Option<i64>) -> Result<String, String> {
+    validate_page_id(page_id)?;
+    let conn = db::get_conn(app)?;
+    
+    let file_path: String = if let Some(v_id) = version_id {
+        conn.query_row(
+            "SELECT file_path FROM versions WHERE id = ?1 AND page_id = ?2",
+            rusqlite::params![v_id, page_id],
+            |row| row.get(0)
+        ).map_err(|e| format!("could not get version file path: {e}"))?
+    } else {
+        "current.html".to_string()
+    };
+    
+    let path = pages_dir(app)?.join(page_id).join(&file_path);
+    fs::read_to_string(&path).map_err(|e| format!("could not read page: {e}"))
+}
+
+pub fn list_versions(app: &AppHandle, page_id: &str) -> Result<Vec<Version>, String> {
+    validate_page_id(page_id)?;
+    let conn = db::get_conn(app)?;
+    
+    let mut stmt = conn
+        .prepare("SELECT id, page_id, file_path, created_at FROM versions WHERE page_id = ?1 ORDER BY created_at DESC")
+        .map_err(|e| format!("could not prepare list versions: {e}"))?;
+
+    let versions = stmt
+        .query_map(rusqlite::params![page_id], |row| {
+            Ok(Version {
+                id: row.get(0)?,
+                page_id: row.get(1)?,
+                file_path: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })
+        .map_err(|e| format!("could not query versions: {e}"))?
+        .filter_map(Result::ok)
+        .collect();
+
+    Ok(versions)
+}
+
+pub fn restore_version(app: &AppHandle, page_id: &str, version_id: i64) -> Result<(), String> {
+    validate_page_id(page_id)?;
+    let conn = db::get_conn(app)?;
+    
+    // Get the version file path
+    let file_path: String = conn.query_row(
+        "SELECT file_path FROM versions WHERE id = ?1 AND page_id = ?2",
+        rusqlite::params![version_id, page_id],
+        |row| row.get(0)
+    ).map_err(|e| format!("could not get version file path: {e}"))?;
+    
+    // Read the old version
+    let html = fs::read_to_string(pages_dir(app)?.join(page_id).join(&file_path))
+        .map_err(|e| format!("could not read version: {e}"))?;
+    
+    let now = now_millis();
+    let new_version_file = format!("{}.html", now);
+    
+    // Write as new current version
+    fs::write(pages_dir(app)?.join(page_id).join(&new_version_file), &html)
+        .map_err(|e| format!("could not save restored version: {e}"))?;
+    fs::write(pages_dir(app)?.join(page_id).join("current.html"), &html)
+        .map_err(|e| format!("could not update current.html: {e}"))?;
+    
+    // Insert new version record
+    conn.execute(
+        "INSERT INTO versions (page_id, file_path, created_at) VALUES (?1, ?2, ?3)",
+        rusqlite::params![page_id, new_version_file, now],
+    ).map_err(|e| format!("could not save restored version record: {e}"))?;
+    
+    let new_version_id = conn.last_insert_rowid();
+    
+    // Update page
+    conn.execute(
+        "UPDATE pages SET current_version_id = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![new_version_id, now, page_id],
+    ).map_err(|e| format!("could not update page: {e}"))?;
+    
+    Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Tag {
+    pub id: i64,
+    pub name: String,
+}
+
+pub fn add_tag(app: &AppHandle, page_id: &str, tag_name: &str) -> Result<(), String> {
+    validate_page_id(page_id)?;
+    let conn = db::get_conn(app)?;
+    
+    let tag_name_lower = tag_name.trim().to_lowercase();
+    
+    // Insert or get tag
+    conn.execute(
+        "INSERT OR IGNORE INTO tags (name) VALUES (?1)",
+        rusqlite::params![tag_name_lower],
+    ).map_err(|e| format!("could not insert tag: {e}"))?;
+    
+    let tag_id: i64 = conn.query_row(
+        "SELECT id FROM tags WHERE name = ?1",
+        rusqlite::params![tag_name_lower],
+        |row| row.get(0)
+    ).map_err(|e| format!("could not get tag id: {e}"))?;
+    
+    // Link to page
+    conn.execute(
+        "INSERT OR IGNORE INTO page_tags (page_id, tag_id) VALUES (?1, ?2)",
+        rusqlite::params![page_id, tag_id],
+    ).map_err(|e| format!("could not link tag to page: {e}"))?;
+    
+    Ok(())
+}
+
+pub fn remove_tag(app: &AppHandle, page_id: &str, tag_name: &str) -> Result<(), String> {
+    validate_page_id(page_id)?;
+    let conn = db::get_conn(app)?;
+    
+    let tag_name_lower = tag_name.trim().to_lowercase();
+    
+    conn.execute(
+        "DELETE FROM page_tags WHERE page_id = ?1 AND tag_id = (SELECT id FROM tags WHERE name = ?2)",
+        rusqlite::params![page_id, tag_name_lower],
+    ).map_err(|e| format!("could not remove tag: {e}"))?;
+    
+    Ok(())
+}
+
+pub fn list_tags_for_page(app: &AppHandle, page_id: &str) -> Result<Vec<Tag>, String> {
+    validate_page_id(page_id)?;
+    let conn = db::get_conn(app)?;
+    
+    let mut stmt = conn
+        .prepare("SELECT t.id, t.name FROM tags t JOIN page_tags pt ON t.id = pt.tag_id WHERE pt.page_id = ?1 ORDER BY t.name")
+        .map_err(|e| format!("could not prepare list tags: {e}"))?;
+
+    let tags = stmt
+        .query_map(rusqlite::params![page_id], |row| {
+            Ok(Tag {
+                id: row.get(0)?,
+                name: row.get(1)?,
+            })
+        })
+        .map_err(|e| format!("could not query tags: {e}"))?
+        .filter_map(Result::ok)
+        .collect();
+
+    Ok(tags)
+}
+
+pub fn search_pages(app: &AppHandle, query: &str) -> Result<Vec<PageMeta>, String> {
+    let conn = db::get_conn(app)?;
+    let query_lower = format!("%{}%", query.to_lowercase());
+    
+    let mut stmt = conn
+        .prepare("
+            SELECT DISTINCT p.id, p.collection_id, p.title, p.created_at, p.updated_at 
+            FROM pages p
+            LEFT JOIN page_tags pt ON p.id = pt.page_id
+            LEFT JOIN tags t ON pt.tag_id = t.id
+            WHERE LOWER(p.title) LIKE ?1 OR LOWER(t.name) LIKE ?1
+            ORDER BY p.updated_at DESC
+        ")
+        .map_err(|e| format!("could not prepare search pages: {e}"))?;
+
+    let pages = stmt
+        .query_map(rusqlite::params![query_lower], |row| {
+            Ok(PageMeta {
+                id: row.get(0)?,
+                collection_id: row.get(1)?,
+                title: row.get(2)?,
+                created_at: row.get(3)?,
+                updated_at: row.get(4)?,
+            })
+        })
+        .map_err(|e| format!("could not query search results: {e}"))?
+        .filter_map(Result::ok)
+        .collect();
+
+    Ok(pages)
 }

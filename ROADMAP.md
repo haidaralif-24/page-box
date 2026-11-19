@@ -11,19 +11,19 @@ Note: page delete was pulled forward from v0.2 (small, and makes testing easier)
 v0.1 stores metadata as `meta.json` per page; SQLite replaces it in v0.2.
 
 ## v0.2 - Organize
-- [ ] SQLite schema + migrations
-- [ ] Collections: create, rename, nest, move, delete
-- [ ] Sidebar tree
-- [ ] Gallery view with page cards
-- [ ] Move pages between collections
-- [ ] Rename and delete pages
+- [x] SQLite schema + migrations
+- [x] Collections: create, rename, nest, move, delete
+- [x] Sidebar tree
+- [x] Gallery view with page cards
+- [x] Move pages between collections
+- [x] Rename and delete pages
 
 ## v0.3 - Replace, history, tags
-- [ ] Replace with new version
-- [ ] Version history list, preview, restore
-- [ ] Copy for AI button
-- [ ] Tags
-- [ ] Search by title and tag
+- [x] Replace with new version
+- [x] Version history list, preview, restore
+- [x] Copy for AI button
+- [x] Tags
+- [x] Search by title and tag
 
 ## v0.4 - Polish
 - [ ] Keyboard shortcuts
