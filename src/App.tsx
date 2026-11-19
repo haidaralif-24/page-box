@@ -14,19 +14,31 @@ import {
   removeTag,
   renameCollection,
   replacePage,
+  restoreVersion,
   searchPages,
   type Collection,
   type PageMeta,
   type Tag,
+  type Version,
 } from "./lib/backend";
 import { PageCard } from "./components/PageCard";
 import { PasteDialog } from "./components/PasteDialog";
 import { ReplaceDialog } from "./components/ReplaceDialog";
 import { PreviewFrame } from "./components/PreviewFrame";
 import { VersionHistory } from "./components/VersionHistory";
+import { FileTree } from "./components/FileTree";
+import { ConfirmDialog, Toast } from "./components/ConfirmDialog";
 import "./App.css";
 
 type View = { name: "gallery" } | { name: "page"; page: PageMeta; html: string };
+
+type ConfirmState = {
+  title?: string;
+  message: string;
+  confirmLabel?: string;
+  danger?: boolean;
+  onConfirm: () => void | Promise<void>;
+} | null;
 
 function App() {
   const [pages, setPages] = useState<PageMeta[]>([]);
@@ -41,6 +53,8 @@ function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -82,7 +96,7 @@ function App() {
     if (view.name !== "page") return;
     const meta = await replacePage(view.page.id, rawText);
     setShowReplace(false);
-    await openPage(meta); // Re-open to get fresh HTML
+    await openPage(meta);
   }
 
   async function openPage(page: PageMeta) {
@@ -96,15 +110,22 @@ function App() {
     }
   }
 
-  async function handleDelete(page: PageMeta) {
-    if (!window.confirm(`Delete "${page.title}"? This can't be undone.`)) return;
-    try {
-      await deletePage(page.id);
-      setView({ name: "gallery" });
-      await refresh();
-    } catch (e) {
-      setError(String(e));
-    }
+  function requestDeletePage(page: PageMeta) {
+    setConfirm({
+      title: "Delete page",
+      message: `Delete "${page.title}"? This can't be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deletePage(page.id);
+          setView({ name: "gallery" });
+          await refresh();
+        } catch (e) {
+          setError(String(e));
+        }
+      },
+    });
   }
 
   async function handleCopyForAI() {
@@ -112,7 +133,7 @@ function App() {
     try {
       const html = await getPageHtml(view.page.id);
       await navigator.clipboard.writeText(html);
-      alert("HTML copied to clipboard!");
+      setToast("HTML copied to clipboard!");
     } catch (e) {
       setError("Failed to copy: " + String(e));
     }
@@ -139,39 +160,42 @@ function App() {
     }
   }
 
-  async function handleCreateCollection() {
-    const name = prompt("Collection name:");
-    if (!name) return;
+  async function handleCreateCollection(parentId: number | null, name: string) {
     try {
-      await createCollection(name, selectedCollectionId);
+      await createCollection(name, parentId);
       await refresh();
     } catch (e) {
       setError(String(e));
     }
   }
 
-  async function handleRenameCollection(collection: Collection) {
-    const name = prompt("New collection name:", collection.name);
-    if (!name || name === collection.name) return;
+  async function handleRenameCollection(id: number, newName: string) {
     try {
-      await renameCollection(collection.id, name);
+      await renameCollection(id, newName);
       await refresh();
     } catch (e) {
       setError(String(e));
     }
   }
 
-  async function handleDeleteCollection(collection: Collection) {
-    if (!window.confirm(`Delete "${collection.name}"? Pages inside will be moved to Unsorted.`)) return;
-    try {
-      await deleteCollection(collection.id);
-      if (selectedCollectionId === collection.id) {
-        setSelectedCollectionId(null);
-      }
-      await refresh();
-    } catch (e) {
-      setError(String(e));
-    }
+  function requestDeleteCollection(collection: Collection) {
+    setConfirm({
+      title: "Delete folder",
+      message: `Delete "${collection.name}"? Pages inside will be moved to Unsorted.`,
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deleteCollection(collection.id);
+          if (selectedCollectionId === collection.id) {
+            setSelectedCollectionId(null);
+          }
+          await refresh();
+        } catch (e) {
+          setError(String(e));
+        }
+      },
+    });
   }
 
   async function handleMovePage(page: PageMeta, newCollectionId: number | null) {
@@ -184,42 +208,39 @@ function App() {
   }
 
   const selectedCollection = collections.find((c) => c.id === selectedCollectionId);
-  const viewTitle = selectedCollection ? selectedCollection.name : searchQuery ? `Search: "${searchQuery}"` : "All Pages";
+  const viewTitle = selectedCollection
+    ? selectedCollection.name
+    : searchQuery
+    ? `Search: "${searchQuery}"`
+    : "All Pages";
 
   return (
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <button className="brand" onClick={() => { setSelectedCollectionId(null); setSearchQuery(""); setView({ name: "gallery" }); }}>
+          <button
+            className="brand"
+            onClick={() => {
+              setSelectedCollectionId(null);
+              setSearchQuery("");
+              setView({ name: "gallery" });
+            }}
+          >
             <img src="/pagebox.svg" alt="" width="20" height="20" />
             <span>Pagebox</span>
           </button>
         </div>
-        <nav className="sidebar-nav">
-          <button
-            className={`nav-item ${selectedCollectionId === null && !searchQuery ? "active" : ""}`}
-            onClick={() => { setSelectedCollectionId(null); setSearchQuery(""); }}
-          >
-            📁 Unsorted
-          </button>
-          {collections.map((c) => (
-            <div key={c.id} className="nav-item-wrapper">
-              <button
-                className={`nav-item ${selectedCollectionId === c.id && !searchQuery ? "active" : ""}`}
-                onClick={() => { setSelectedCollectionId(c.id); setSearchQuery(""); }}
-              >
-                📂 {c.name}
-              </button>
-              <div className="nav-actions">
-                <button title="Rename" onClick={() => handleRenameCollection(c)}>✏️</button>
-                <button title="Delete" onClick={() => handleDeleteCollection(c)}>🗑️</button>
-              </div>
-            </div>
-          ))}
-          <button className="nav-item add-collection" onClick={handleCreateCollection}>
-            + New Collection
-          </button>
-        </nav>
+        <FileTree
+          collections={collections}
+          selectedCollectionId={searchQuery ? null : selectedCollectionId}
+          onSelect={(id) => {
+            setSelectedCollectionId(id);
+            setSearchQuery("");
+          }}
+          onCreate={handleCreateCollection}
+          onRename={handleRenameCollection}
+          onDelete={requestDeleteCollection}
+        />
       </aside>
 
       <div className="main-content">
@@ -258,8 +279,8 @@ function App() {
                 <img src="/pagebox.svg" alt="" width="56" height="56" />
                 <h2>{searchQuery ? "No matching pages found" : "No pages here yet"}</h2>
                 <p>
-                  {searchQuery 
-                    ? "Try a different search term." 
+                  {searchQuery
+                    ? "Try a different search term."
                     : "Paste the HTML your AI tool gave you and it will show up here — rendered safely, saved locally."}
                 </p>
                 {!searchQuery && (
@@ -285,32 +306,54 @@ function App() {
         ) : (
           <main className="page-view">
             <div className="page-toolbar">
-              <button className="btn" onClick={() => setView({ name: "gallery" })}>
+              <button
+                className="btn"
+                onClick={() => setView({ name: "gallery" })}
+              >
                 ← Back to {selectedCollection ? selectedCollection.name : "All Pages"}
               </button>
               <h2 className="page-title-small">{view.page.title}</h2>
               <div className="page-toolbar-actions">
-                <button className="btn" onClick={() => setShowReplace(true)} title="Replace with new version">
+                <button
+                  className="btn"
+                  onClick={() => setShowReplace(true)}
+                  title="Replace with new version"
+                >
                   🔄 Replace
                 </button>
-                <button className="btn" onClick={() => setShowHistory(true)} title="View version history">
+                <button
+                  className="btn"
+                  onClick={() => setShowHistory(true)}
+                  title="View version history"
+                >
                   🕒 History
                 </button>
-                <button className="btn" onClick={handleCopyForAI} title="Copy raw HTML to clipboard">
+                <button
+                  className="btn"
+                  onClick={handleCopyForAI}
+                  title="Copy raw HTML to clipboard"
+                >
                   📋 Copy for AI
                 </button>
-                <button className="btn danger" onClick={() => void handleDelete(view.page)}>
+                <button
+                  className="btn danger"
+                  onClick={() => requestDeletePage(view.page)}
+                >
                   🗑️ Delete
                 </button>
               </div>
             </div>
-            
+
             <div className="page-tags-section">
               <span className="tags-label">Tags:</span>
               {tags.map((tag) => (
                 <span key={tag.id} className="tag">
                   {tag.name}
-                  <button className="tag-remove" onClick={() => handleRemoveTag(tag.name)} title="Remove tag">
+                  <button
+                    className="tag-remove"
+                    onClick={() => handleRemoveTag(tag.name)}
+                    title="Remove tag"
+                  >
                     ×
                   </button>
                 </span>
@@ -334,19 +377,57 @@ function App() {
           </main>
         )}
 
-        {showPaste && <PasteDialog onSave={handleSave} onClose={() => setShowPaste(false)} />}
+        {showPaste && (
+          <PasteDialog onSave={handleSave} onClose={() => setShowPaste(false)} />
+        )}
         {showReplace && view.name === "page" && (
-          <ReplaceDialog currentHtml={view.html} onSave={handleReplace} onClose={() => setShowReplace(false)} />
+          <ReplaceDialog
+            currentHtml={view.html}
+            onSave={handleReplace}
+            onClose={() => setShowReplace(false)}
+          />
         )}
         {showHistory && view.name === "page" && (
           <VersionHistory
             pageId={view.page.id}
             onClose={() => setShowHistory(false)}
-            onRestore={async () => {
-              await openPage(view.page);
+            onRequestRestore={(v: Version) => {
+              setConfirm({
+                title: "Restore version",
+                message: `Restore version v${v.id}? The current version will be saved as a new snapshot.`,
+                confirmLabel: "Restore",
+                onConfirm: async () => {
+                  try {
+                    await restoreVersion(view.page.id, v.id);
+                    await openPage(view.page);
+                    setShowHistory(false);
+                  } catch (e) {
+                    setError(String(e));
+                  }
+                },
+              });
             }}
           />
         )}
+
+        {confirm && (
+          <ConfirmDialog
+            title={confirm.title}
+            message={confirm.message}
+            confirmLabel={confirm.confirmLabel}
+            danger={confirm.danger}
+            onConfirm={async () => {
+              try {
+                await confirm.onConfirm();
+              } finally {
+                setConfirm(null);
+              }
+            }}
+            onCancel={() => setConfirm(null)}
+          />
+        )}
+
+        {toast && <Toast message={toast} onClose={() => setToast(null)} />}
       </div>
     </div>
   );

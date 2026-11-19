@@ -1,57 +1,91 @@
 import { useState, useEffect } from "react";
-import { Version, listVersions, restoreVersion, getPageHtml } from "../lib/backend";
+import { Version, listVersions, getPageHtml } from "../lib/backend";
 
 interface Props {
   pageId: string;
   onClose: () => void;
-  onRestore: () => void;
+  /** Called when the user wants to restore a version. Parent shows a confirm dialog. */
+  onRequestRestore: (version: Version) => void;
 }
 
-export function VersionHistory({ pageId, onClose, onRestore }: Props) {
+export function VersionHistory({ pageId, onClose, onRequestRestore }: Props) {
   const [versions, setVersions] = useState<Version[]>([]);
   const [previewHtml, setPreviewHtml] = useState<string>("");
+  const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
 
   useEffect(() => {
     listVersions(pageId).then(setVersions);
   }, [pageId]);
 
   const handlePreview = async (v: Version) => {
-    const html = await getPageHtml(pageId, v.id);
-    setPreviewHtml(html);
-  };
-
-  const handleRestore = async (v: Version) => {
-    if (confirm("Restore this version? The current version will be saved as a new snapshot.")) {
-      await restoreVersion(pageId, v.id);
-      onRestore();
-      onClose();
+    setSelectedVersionId(v.id);
+    try {
+      const html = await getPageHtml(pageId, v.id);
+      setPreviewHtml(html);
+    } catch (e) {
+      setPreviewHtml("");
     }
   };
 
+  const selectedVersion = versions.find((v) => v.id === selectedVersionId);
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 100 }}>
-      <div style={{ background: "white", padding: 20, borderRadius: 8, width: 600, maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-          <h3 style={{ margin: 0 }}>Version History</h3>
-          <button onClick={onClose}>✕</button>
+    <div className="dialog-overlay" onClick={onClose}>
+      <div
+        className="version-history-dialog"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="version-history-header">
+          <h3>Version History</h3>
+          <button className="version-history-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
         </div>
-        <div style={{ display: "flex", gap: 16, flex: 1, overflow: "hidden" }}>
-          <div style={{ width: 200, overflowY: "auto", borderRight: "1px solid #ccc", paddingRight: 8 }}>
-            {versions.map(v => (
-              <div key={v.id} style={{ padding: 8, cursor: "pointer", borderRadius: 4 }}
-                   onMouseEnter={() => handlePreview(v)}>
-                <div style={{ fontWeight: "bold" }}>v{v.id}</div>
-                <div style={{ fontSize: 12, color: "#666" }}>{new Date(v.createdAt).toLocaleString()}</div>
-                <button onClick={() => handleRestore(v)} style={{ marginTop: 4, fontSize: 12 }}>Restore</button>
+        <div className="version-history-body">
+          <div className="version-list">
+            {versions.length === 0 && (
+              <p className="muted" style={{ padding: 8, fontSize: 13 }}>
+                No versions yet.
+              </p>
+            )}
+            {versions.map((v) => (
+              <div
+                key={v.id}
+                className={`version-item ${selectedVersionId === v.id ? "selected" : ""}`}
+                onMouseEnter={() => handlePreview(v)}
+                onFocus={() => handlePreview(v)}
+                tabIndex={0}
+              >
+                <div className="version-item-title">v{v.id}</div>
+                <div className="version-item-date">
+                  {new Date(v.createdAt).toLocaleString()}
+                </div>
+                <button
+                  className="btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRequestRestore(v);
+                  }}
+                  style={{ marginTop: 4, fontSize: 12, padding: "3px 10px" }}
+                >
+                  Restore
+                </button>
               </div>
             ))}
           </div>
-          <div style={{ flex: 1, border: "1px solid #ccc", borderRadius: 4, overflow: "hidden" }}>
+          <div className="version-preview">
             {previewHtml ? (
-              <iframe srcDoc={previewHtml} style={{ width: "100%", height: "100%", border: "none" }}
-                      sandbox="allow-scripts" />
+              <iframe
+                srcDoc={previewHtml}
+                title="Version preview"
+                sandbox="allow-scripts"
+              />
             ) : (
-              <div style={{ padding: 16, color: "#666" }}>Hover over a version to preview</div>
+              <div className="version-preview-empty">
+                {selectedVersion
+                  ? "Loading preview…"
+                  : "Hover over a version to preview"}
+              </div>
             )}
           </div>
         </div>

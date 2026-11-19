@@ -25,7 +25,14 @@ v0.1 stores metadata as `meta.json` per page; SQLite replaces it in v0.2.
 - [x] Tags
 - [x] Search by title and tag
 
-## v0.4 - Polish
+## v0.4 - Directory-Styled Storage Structure
+- [x] Virtual nested folder structure (collections with `parent_id`)
+- [x] Tree-view sidebar with expand/collapse functionality
+- [x] All data stored purely in SQLite (no actual files on disk)
+- [x] Migration script for legacy data
+- [x] macOS permission error resolved
+
+## v0.5 - Polish
 - [ ] Keyboard shortcuts
 - [ ] Drag-and-drop (pages into collections, `.html` files into the window)
 - [ ] Dark mode
@@ -33,7 +40,7 @@ v0.1 stores metadata as `meta.json` per page; SQLite replaces it in v0.2.
 - [ ] Allow-internet toggle with clear labeling
 - [ ] Security test pages all pass
 
-## v0.5 - Ship
+## v0.6 - Ship
 - [ ] Real thumbnails
 - [ ] Full-text content search
 - [ ] Export page / collection (.html, .zip)
