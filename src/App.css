@@ -115,6 +115,9 @@ body {
   border-top: 1px solid var(--border);
   border-radius: 8px;
   padding-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .nav-item.add-collection:hover {
@@ -492,7 +495,9 @@ body {
 }
 
 .dropdown-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   text-align: left;
   padding: 8px 12px;
@@ -502,6 +507,11 @@ body {
   color: var(--text);
   font-size: 13px;
   cursor: pointer;
+}
+
+.dropdown-item svg {
+  flex-shrink: 0;
+  color: var(--muted);
 }
 
 .dropdown-item:hover {
@@ -542,6 +552,16 @@ body {
 .page-toolbar-actions {
   display: flex;
   gap: 8px;
+}
+
+.page-toolbar-actions .btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-toolbar-actions .btn svg {
+  flex-shrink: 0;
 }
 
 /* Tags Section */

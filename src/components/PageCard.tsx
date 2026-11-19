@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Collection, PageMeta } from "../lib/backend";
+import { FolderOpenIcon, UnsortedIcon, MoreVertIcon } from "./Icons";
 
 interface PageCardProps {
   page: PageMeta;
@@ -62,7 +63,7 @@ export function PageCard({ page, onOpen, onMove, collections }: PageCardProps) {
           onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
           title="Move to collection"
         >
-          ⋮
+          <MoreVertIcon size={16} />
         </button>
         {showMenu && (
           <div className="dropdown-menu" onClick={(e) => e.stopPropagation()}>
@@ -70,7 +71,8 @@ export function PageCard({ page, onOpen, onMove, collections }: PageCardProps) {
               className="dropdown-item" 
               onClick={(e) => handleMoveClick(e, null)}
             >
-              📁 Unsorted
+              <UnsortedIcon size={14} />
+              <span>Unsorted</span>
             </button>
             {collections.map((c) => (
               <button
@@ -78,7 +80,8 @@ export function PageCard({ page, onOpen, onMove, collections }: PageCardProps) {
                 className="dropdown-item"
                 onClick={(e) => handleMoveClick(e, c.id)}
               >
-                📂 {c.name}
+                <FolderOpenIcon size={14} />
+                <span>{c.name}</span>
               </button>
             ))}
           </div>

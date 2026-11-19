@@ -65,6 +65,79 @@ pub fn init_db(app: &AppHandle) -> Result<Connection, String> {
         .map_err(|e| format!("could not add content column to pages table: {e}"))?;
     }
 
+    // Backfill: Populate content from old pages/<id>/current.html files for pages with empty content.
+    // This handles the case where the content column was added via ALTER TABLE on an existing database,
+    // giving all existing rows empty strings instead of their actual HTML.
+    let empty_content_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pages WHERE content = '' OR content IS NULL",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| format!("could not count empty content pages: {e}"))?;
+
+    if empty_content_count > 0 {
+        let old_pages_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("could not resolve app data directory: {e}"))?
+            .join("pages");
+
+        if old_pages_dir.exists() {
+            let mut stmt = conn
+                .prepare("SELECT id FROM pages WHERE content = '' OR content IS NULL")
+                .map_err(|e| format!("could not prepare empty content pages: {e}"))?;
+
+            let page_ids: Vec<String> = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| format!("could not query empty content pages: {e}"))?
+                .filter_map(Result::ok)
+                .collect();
+
+            for page_id in page_ids {
+                let html_path = old_pages_dir.join(&page_id).join("current.html");
+                if let Ok(html) = fs::read_to_string(&html_path) {
+                    if !html.is_empty() {
+                        let _ = conn.execute(
+                            "UPDATE pages SET content = ?1 WHERE id = ?2",
+                            rusqlite::params![html, page_id],
+                        );
+
+                        // Also create an initial version if none exists
+                        let version_count: i64 = conn
+                            .query_row(
+                                "SELECT COUNT(*) FROM versions WHERE page_id = ?1",
+                                rusqlite::params![page_id],
+                                |row| row.get(0),
+                            )
+                            .unwrap_or(0);
+
+                        if version_count == 0 {
+                            let created_at: u64 = conn
+                                .query_row(
+                                    "SELECT created_at FROM pages WHERE id = ?1",
+                                    rusqlite::params![page_id],
+                                    |row| row.get(0),
+                                )
+                                .unwrap_or(0);
+
+                            let _ = conn.execute(
+                                "INSERT INTO versions (page_id, content, created_at) VALUES (?1, ?2, ?3)",
+                                rusqlite::params![page_id, html, created_at],
+                            );
+
+                            let version_id = conn.last_insert_rowid();
+                            let _ = conn.execute(
+                                "UPDATE pages SET current_version_id = ?1 WHERE id = ?2 AND current_version_id IS NULL",
+                                rusqlite::params![version_id, page_id],
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS versions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

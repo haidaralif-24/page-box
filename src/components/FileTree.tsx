@@ -1,10 +1,21 @@
 import { useState, useEffect, useRef, type KeyboardEvent } from "react";
 import { Collection } from "../lib/backend";
+import {
+  FolderIcon,
+  FolderOpenIcon,
+  FolderPlusIcon,
+  AllPagesIcon,
+  UnsortedIcon,
+  EditIcon,
+  TrashIcon,
+  ChevronRightIcon,
+  ChevronDownIcon,
+} from "./Icons";
 
 interface FileTreeProps {
   collections: Collection[];
   pageCounts: Map<number | null, number>;
-  selectedCollectionId: number | null; // null = unsorted selected; number = collection selected
+  selectedCollectionId: number | null;
   isAllSelected: boolean;
   onSelectAll: () => void;
   onSelectUnsorted: () => void;
@@ -43,7 +54,6 @@ function buildTree(collections: Collection[]): TreeNode[] {
   return roots;
 }
 
-/** Inline input that appears in place of a tree label (VS Code style). */
 function InlineInput({
   initialValue,
   onSubmit,
@@ -152,7 +162,7 @@ function TreeNodeComponent({
         {isEditingThis ? (
           <div className="nav-item tree-node editing">
             <span className="tree-toggle-spacer" />
-            <span className="tree-icon">📂</span>
+            <span className="tree-icon"><FolderOpenIcon size={16} /></span>
             <InlineInput
               initialValue={node.name}
               onSubmit={(newName) => onRenameSubmit(node.id, newName)}
@@ -175,24 +185,26 @@ function TreeNodeComponent({
                     setIsExpanded(!isExpanded);
                   }}
                 >
-                  {isExpanded ? "▼" : "▶"}
+                  {isExpanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
                 </span>
               ) : (
                 <span className="tree-toggle-spacer" />
               )}
-              <span className="tree-icon">{hasChildren ? "📁" : "📂"}</span>
+              <span className="tree-icon">
+                {hasChildren ? <FolderIcon size={16} /> : <FolderOpenIcon size={16} />}
+              </span>
               <span className="tree-label">{node.name}</span>
               {count > 0 && <span className="tree-count">{count}</span>}
             </button>
             <div className="nav-actions">
               <button title="New subfolder" onClick={() => onStartCreate(node.id)}>
-                📁+
+                <FolderPlusIcon size={14} />
               </button>
               <button title="Rename" onClick={() => onStartRename(node.id)}>
-                ✏️
+                <EditIcon size={14} />
               </button>
               <button title="Delete" onClick={() => onDelete(node)}>
-                🗑️
+                <TrashIcon size={14} />
               </button>
             </div>
           </>
@@ -208,7 +220,7 @@ function TreeNodeComponent({
             >
               <div className="nav-item tree-node editing">
                 <span className="tree-toggle-spacer" />
-                <span className="tree-icon">📁</span>
+                <span className="tree-icon"><FolderIcon size={16} /></span>
                 <InlineInput
                   initialValue=""
                   onSubmit={(name) => onRenameSubmit(-node.id, name)}
@@ -272,7 +284,6 @@ export function FileTree({
     setCreatingAtRoot(false);
   };
 
-  // Sign convention: positive id = rename, negative id = create child under |id|
   const handleRenameOrSubmit = (id: number, newName: string) => {
     if (id < 0) {
       onCreate(-id, newName);
@@ -292,27 +303,24 @@ export function FileTree({
 
   return (
     <nav className="sidebar-nav">
-      {/* All Pages */}
       <button
         className={`nav-item ${isAllSelected ? "active" : ""}`}
         onClick={onSelectAll}
       >
-        <span className="tree-icon">📚</span>
+        <span className="tree-icon"><AllPagesIcon size={16} /></span>
         <span className="tree-label">All Pages</span>
         {totalPageCount > 0 && <span className="tree-count">{totalPageCount}</span>}
       </button>
 
-      {/* Unsorted */}
       <button
         className={`nav-item ${!isAllSelected && selectedCollectionId === null ? "active" : ""}`}
         onClick={onSelectUnsorted}
       >
-        <span className="tree-icon">📥</span>
+        <span className="tree-icon"><UnsortedIcon size={16} /></span>
         <span className="tree-label">Unsorted</span>
         {unsortedCount > 0 && <span className="tree-count">{unsortedCount}</span>}
       </button>
 
-      {/* Collections tree */}
       {tree.map((node) => (
         <TreeNodeComponent
           key={node.id}
@@ -336,7 +344,7 @@ export function FileTree({
       {creatingAtRoot ? (
         <div className="nav-item-wrapper" style={{ paddingLeft: 8, marginTop: 8 }}>
           <div className="nav-item tree-node editing">
-            <span className="tree-icon">📁</span>
+            <span className="tree-icon"><FolderIcon size={16} /></span>
             <InlineInput
               initialValue=""
               onSubmit={handleSubmitCreateAtRoot}
@@ -350,7 +358,8 @@ export function FileTree({
           className="nav-item add-collection"
           onClick={() => handleStartCreate(null)}
         >
-          + New Collection
+          <FolderPlusIcon size={16} />
+          <span>New Collection</span>
         </button>
       )}
     </nav>

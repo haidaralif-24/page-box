@@ -29,6 +29,7 @@ import { PreviewFrame } from "./components/PreviewFrame";
 import { VersionHistory } from "./components/VersionHistory";
 import { FileTree } from "./components/FileTree";
 import { ConfirmDialog, Toast } from "./components/ConfirmDialog";
+import { RefreshIcon, ClockIcon, CopyIcon, TrashIcon } from "./components/Icons";
 import "./App.css";
 
 type View = { name: "gallery" } | { name: "page"; page: PageMeta; html: string };
@@ -353,27 +354,31 @@ function App() {
                   onClick={() => setShowReplace(true)}
                   title="Replace with new version"
                 >
-                  🔄 Replace
+                  <RefreshIcon size={14} />
+                  <span>Replace</span>
                 </button>
                 <button
                   className="btn"
                   onClick={() => setShowHistory(true)}
                   title="View version history"
                 >
-                  🕒 History
+                  <ClockIcon size={14} />
+                  <span>History</span>
                 </button>
                 <button
                   className="btn"
                   onClick={handleCopyForAI}
                   title="Copy raw HTML to clipboard"
                 >
-                  📋 Copy for AI
+                  <CopyIcon size={14} />
+                  <span>Copy for AI</span>
                 </button>
                 <button
                   className="btn danger"
                   onClick={() => requestDeletePage(view.page)}
                 >
-                  🗑️ Delete
+                  <TrashIcon size={14} />
+                  <span>Delete</span>
                 </button>
               </div>
             </div>

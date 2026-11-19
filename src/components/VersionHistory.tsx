@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Version, listVersions, getPageHtml } from "../lib/backend";
+import { CloseIcon } from "./Icons";
 
 interface Props {
   pageId: string;
@@ -38,7 +39,7 @@ export function VersionHistory({ pageId, onClose, onRequestRestore }: Props) {
         <div className="version-history-header">
           <h3>Version History</h3>
           <button className="version-history-close" onClick={onClose} aria-label="Close">
-            ✕
+            <CloseIcon size={18} />
           </button>
         </div>
         <div className="version-history-body">

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { CloseIcon } from "./Icons";
 
 interface ConfirmDialogProps {
   title?: string;
@@ -90,7 +91,7 @@ export function Toast({ message, onClose, durationMs = 2500 }: ToastProps) {
     <div className="toast" role="status" aria-live="polite">
       <span>{message}</span>
       <button className="toast-close" onClick={onClose} aria-label="Dismiss">
-        ×
+        <CloseIcon size={16} />
       </button>
     </div>
   );

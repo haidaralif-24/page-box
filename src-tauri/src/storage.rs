@@ -175,6 +175,15 @@ pub fn replace_page(app: &AppHandle, page_id: &str, raw_text: &str) -> Result<Pa
     let conn = db::get_conn(app)?;
     let now = now_millis();
     
+    // Read existing metadata before updating
+    let existing: (Option<i64>, u64) = conn
+        .query_row(
+            "SELECT collection_id, created_at FROM pages WHERE id = ?1",
+            rusqlite::params![page_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| format!("could not read existing page: {e}"))?;
+
     conn.execute(
         "INSERT INTO versions (page_id, content, created_at) VALUES (?1, ?2, ?3)",
         rusqlite::params![page_id, cleaned.html, now],
@@ -188,9 +197,9 @@ pub fn replace_page(app: &AppHandle, page_id: &str, raw_text: &str) -> Result<Pa
     
     Ok(PageMeta {
         id: page_id.to_string(),
-        collection_id: None,
+        collection_id: existing.0,
         title: cleaned.title,
-        created_at: now,
+        created_at: existing.1,
         updated_at: now,
     })
 }
