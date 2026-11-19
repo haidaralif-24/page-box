@@ -4,7 +4,7 @@
 
 [![Release](https://github.com/haidaralif-24/page-box/actions/workflows/release.yaml/badge.svg)](https://github.com/haidaralif-24/page-box/actions/workflows/release.yaml)
 [![Latest release](https://img.shields.io/github/v/release/haidaralif-24/page-box?label=latest%20release)](https://github.com/haidaralif-24/page-box/releases/latest)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 <!-- TODO: add a demo GIF here (docs/screenshots/demo.gif) -->
 
@@ -107,4 +107,4 @@ Review the draft on the Releases page, then publish it.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
