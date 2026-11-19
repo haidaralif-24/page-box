@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#161b22;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0d1117;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="pageGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#e6edf3;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c9d1d9;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background rounded square -->
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bgGradient)"/>
+  
+  <!-- Box outline (3D effect with top flaps) -->
+  <!-- Back of box -->
+  <path d="M 280 380 L 280 640 L 744 640 L 744 380 Z" fill="none" stroke="#58a6ff" stroke-width="32" stroke-linejoin="round"/>
+  
+  <!-- Top flaps of open box -->
+  <path d="M 280 380 L 380 280 L 644 280 L 744 380" fill="none" stroke="#58a6ff" stroke-width="32" stroke-linejoin="round" stroke-linecap="round"/>
+  
+  <!-- Left flap (folded) -->
+  <path d="M 280 380 L 380 280 L 380 420 L 280 380 Z" fill="#58a6ff" opacity="0.3"/>
+  
+  <!-- Right flap (folded) -->
+  <path d="M 744 380 L 644 280 L 644 420 L 744 380 Z" fill="#58a6ff" opacity="0.3"/>
+  
+  <!-- Page/document sticking out of box -->
+  <rect x="360" y="320" width="304" height="380" rx="24" fill="url(#pageGradient)"/>
+  
+  <!-- Page corner fold -->
+  <path d="M 664 320 L 664 380 L 604 380 Z" fill="#8b949e"/>
+  <path d="M 664 320 L 604 380 L 664 380 Z" fill="#a5b4c7"/>
+  
+  <!-- Code lines on page (representing HTML) -->
+  <rect x="400" y="420" width="200" height="8" rx="4" fill="#58a6ff"/>
+  <rect x="400" y="448" width="160" height="8" rx="4" fill="#8b949e"/>
+  <rect x="400" y="476" width="180" height="8" rx="4" fill="#8b949e"/>
+  <rect x="400" y="504" width="140" height="8" rx="4" fill="#8b949e"/>
+  
+  <!-- HTML brackets -->
+  <text x="400" y="580" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="48" font-weight="700" fill="#58a6ff">&lt;/&gt;</text>
+  
+  <!-- Box front edge (thickness) -->
+  <path d="M 280 640 L 280 680 L 744 680 L 744 640" fill="#58a6ff" opacity="0.5"/>
+</svg>
