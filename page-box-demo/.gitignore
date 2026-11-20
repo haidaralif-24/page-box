@@ -1,0 +1,11 @@
+node_modules/
+out/
+.remotion/
+sheets/
+videos/
+public/videos/*
+!public/videos/.gitkeep
+public/audio/
+.browser/
+.qa-tmp/
+.DS_Store

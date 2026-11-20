@@ -1,0 +1,48 @@
+{
+  "S3": {
+    "pt1": {
+      "file": "videos/S3-pt1.mov",
+      "fps": 60,
+      "width": 3360,
+      "height": 2100,
+      "durationSec": 56.291667,
+      "frames": 3378
+    },
+    "pt2": {
+      "file": "videos/S3-pt2.mov",
+      "fps": 60,
+      "width": 3360,
+      "height": 2100,
+      "durationSec": 36.75,
+      "frames": 2205
+    }
+  },
+  "S4": {
+    "pt1": {
+      "file": "videos/S4-LiveSearch.mov",
+      "fps": 60,
+      "width": 3360,
+      "height": 2100,
+      "durationSec": 15.233333,
+      "frames": 914
+    }
+  },
+  "S5": {
+    "pt1": {
+      "file": "videos/S5-pt1.mov",
+      "fps": 60,
+      "width": 3360,
+      "height": 2100,
+      "durationSec": 25.675,
+      "frames": 1541
+    },
+    "pt2": {
+      "file": "videos/S5-pt2.mov",
+      "fps": 60,
+      "width": 3360,
+      "height": 2100,
+      "durationSec": 31.866667,
+      "frames": 1912
+    }
+  }
+}

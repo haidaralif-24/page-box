@@ -1,0 +1,33 @@
+{
+  "name": "page-box-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Remotion demo video for Pagebox — code-driven scenes + recorded-take pipeline",
+  "scripts": {
+    "studio": "remotion studio",
+    "ingest": "node scripts/ingest.mjs",
+    "audio": "node scripts/audio.mjs",
+    "compositions": "remotion compositions",
+    "render": "remotion render Demo out/pagebox-demo.mp4 --codec=h264 --crf=18",
+    "still": "remotion still Thumbnail out/thumbnail.jpg --image-format=jpeg --scale=0.6667",
+    "gif": "remotion render ReadmeGif out/readme.gif --codec=gif --every-nth-frame=2",
+    "qa": "node scripts/stills.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "@remotion/google-fonts": "^4.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.5.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
