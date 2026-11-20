@@ -1,6 +1,6 @@
 [package]
 name = "pagebox"
-version = "0.1.0"
+version = "0.1.2"
 description = "Pagebox - a notes app for AI-generated HTML"
 authors = ["haidaralif-24"]
 edition = "2024"
