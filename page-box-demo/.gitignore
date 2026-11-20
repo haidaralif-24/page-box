@@ -2,7 +2,7 @@ node_modules/
 out/
 .remotion/
 sheets/
-videos/
+/videos/
 public/videos/*
 !public/videos/.gitkeep
 public/audio/
