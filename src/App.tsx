@@ -247,7 +247,7 @@ function App() {
               setView({ name: "gallery" });
             }}
           >
-            <img src="/pagebox.svg" alt="" width="20" height="20" />
+            <img src="/icon.png" alt="" width="20" height="20" style={{ borderRadius: 4 }} />
             <span>Pagebox</span>
           </button>
         </div>
@@ -307,7 +307,7 @@ function App() {
               <p className="muted">Loading…</p>
             ) : pages.length === 0 ? (
               <div className="empty-state">
-                <img src="/pagebox.svg" alt="" width="56" height="56" />
+                <img src="/icon.png" alt="" width="56" height="56" style={{ borderRadius: 12 }} />
                 <h2>{searchQuery ? "No matching pages found" : "No pages here yet"}</h2>
                 <p>
                   {searchQuery
