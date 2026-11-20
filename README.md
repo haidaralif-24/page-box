@@ -53,13 +53,21 @@ without learning how to manage files, editors, or local servers.
 
 ## Status
 
-v0.1 — paste and preview works. See [ROADMAP.md](ROADMAP.md).
+v0.4 — paste & sandboxed preview, collections, replace + version history, tags,
+search, and AI prompt tools. The release pipeline builds installers and portable
+ZIPs for every platform; the first public release is being prepared.
+See [ROADMAP.md](ROADMAP.md).
+
+> Built speedrun-style with heavy AI assistance (**Qwen4-Max**). The
+> [devlog](docs/devlog/the-speedrun.md) is the honest record of what I did,
+> what the AI did, and what broke along the way.
 
 ## Tech stack
 
 - [Tauri 2](https://tauri.app) (Rust backend)
 - React + TypeScript + Vite (frontend)
-- SQLite for metadata, plain `.html` files on disk for content
+- SQLite for everything — metadata, page HTML, and version history
+  (folders are virtual; no loose files on disk)
 
 ## Documentation
 
@@ -70,7 +78,7 @@ v0.1 — paste and preview works. See [ROADMAP.md](ROADMAP.md).
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How it's built, data model |
 | [SECURITY.md](SECURITY.md) | How untrusted HTML is handled safely |
 | [ROADMAP.md](ROADMAP.md) | Milestones and checklist |
-| [docs/devlog/](docs/devlog/) | Build journal |
+| [Devlog](docs/devlog/the-speedrun.md) | The whole build in one log — phases, failures, AI disclaimer |
 
 ## Getting started (development)
 
