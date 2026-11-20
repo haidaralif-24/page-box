@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       quality:
-        description: "web = 720p + small file (README), full = 1080p"
+        description: "web = 540p + small file (README), full = 1080p"
         type: choice
         default: web
         options: [web, full]
@@ -77,7 +77,9 @@ jobs:
         run: |
           args="--codec=h264 --x264-preset=veryfast --concurrency=4 --gl=swangle"
           if [ "${{ inputs.quality }}" = "web" ]; then
-            args="$args --crf=28 --scale=0.6667"
+            # 0.5 -> exact 960x540. Fractional scales like 0.6667 produce
+            # non-integer dimensions, which stitchFramesToVideo() rejects.
+            args="$args --crf=28 --scale=0.5"
           else
             args="$args --crf=20"
           fi

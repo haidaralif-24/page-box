@@ -35,14 +35,15 @@ Neither step is needed on normal machines or in CI.
 ```bash
 pnpm render   # full quality (crf 18), slow
 
-# fast/small version for the README (720p):
+# fast/small version for the README (540p — scale must yield integer
+# dimensions, so 0.5 works but 0.6667 does not):
 pnpm exec remotion render Demo out/pagebox-demo-web.mp4 \
-  --codec=h264 --crf=28 --x264-preset=veryfast --scale=0.6667 --concurrency=8
+  --codec=h264 --crf=28 --x264-preset=veryfast --scale=0.5 --concurrency=8
 ```
 
 ## Render on GitHub Actions
 
-Repo → **Actions → Render demo → Run workflow**. Pick `web` (720p, small) or
+Repo → **Actions → Render demo → Run workflow**. Pick `web` (540p, small) or
 `full` (1080p), optionally a frame range (e.g. `520-610`) for a quick test.
 The job downloads the takes from the `demo-footage-v1` prerelease, regenerates
 the audio bed, renders on `ubuntu-latest`, and uploads the mp4 as a build
