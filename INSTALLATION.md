@@ -101,8 +101,14 @@ The app and your data are separate. Your pages live in your user profile:
 | Windows | `%APPDATA%\com.pagebox.app` |
 | Linux | `~/.local/share/com.pagebox.app` |
 
-Inside: `app.db` (SQLite metadata) and `pages/` with plain `.html` files.
-**Backup = copy that folder.** Moving or replacing the app never touches it.
+Inside: **`app.db`** — one SQLite database holding everything: your pages' HTML,
+version history, collections, and tags. No loose `.html` files.
+**Backup = copy that folder** (or just `app.db`). Moving or replacing the app
+never touches it.
+
+If you ran a very early build you may also see a `pages.old/` folder — leftover
+from the one-time automatic migration into the database. Your data lives in
+`app.db` now.
 
 ## Updating & uninstalling
 
@@ -116,7 +122,7 @@ Context you probably want before allowlisting:
 
 - **What it is:** an open-source (MIT) notes app for AI-generated HTML, built with Tauri 2 (Rust + the system webview). All source is in this repo; release builds are produced by GitHub Actions (`.github/workflows/release.yaml`).
 - **Why the warnings:** binaries are currently unsigned / un-notarized — hence Gatekeeper and SmartScreen. Code signing + notarization is the long-term fix.
-- **Behavior:** no services, no drivers, no elevated privileges. Per-user data only (paths above). Previewed pages run in an opaque-origin sandboxed iframe with network blocked by default — details in [SECURITY.md](SECURITY.md).
+- **Behavior:** no services, no drivers, no elevated privileges. All data is a single SQLite file in the per-user app-data directory (paths above); the app writes nowhere else. Previewed pages run in an opaque-origin sandboxed iframe with network blocked by default — details in [SECURITY.md](SECURITY.md).
 - **Deployment options:** allowlist by hash/path; or repackage and push via Jamf Self Service / Intune Company Portal; the NSIS `-setup.exe` installs per-user without admin rights; the portable exe runs from any user-writable folder.
 - App identifier: `com.pagebox.app`. Need hashes, a specific build, or anything else? Open an issue.
 

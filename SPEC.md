@@ -1,5 +1,9 @@
 # Pagebox - Product Spec
 
+> Tracks the current build (**v0.4-dev**). Unbuilt items are marked *(planned)*
+> with their roadmap milestone; milestone names carry the `-dev` suffix,
+> published releases are tagged `v0.1.x`.
+
 ## 1. Summary
 
 A desktop app for storing, previewing, and organizing HTML pages, designed for people who
@@ -55,14 +59,16 @@ Use friendly words in the UI:
 
 ### 6.4 Organize
 - Create, rename, move, and delete collections (nested).
-- Move pages between collections (drag-and-drop, or a "Move to..." menu).
+- Move pages between collections (a "Move to..." menu today; drag-and-drop planned for v0.5-dev).
 - Add and remove tags on pages.
 
 ### 6.5 Copy for AI
-Copies the current page's raw HTML to the clipboard.
+Copies the current page's HTML to the clipboard — raw, or wrapped in a
+goal-based prompt (fix bugs, add a feature, improve design, make responsive,
+accessibility) built by the Copy for AI dialog.
 
 ### 6.6 Search
-Search by title and tags (v0.3), then by page content (v0.4).
+Search by title and tags (v0.3-dev). Full-text content search is planned for v0.6-dev.
 
 ## 7. Functional requirements
 
@@ -84,19 +90,25 @@ When the user pastes text:
 - Thumbnails can start as a scaled-down live iframe; real image thumbnails come later.
 
 ### 7.4 Storage
-- Everything is local. Data lives in the OS app-data directory.
-- HTML content = files on disk; metadata = SQLite. See ARCHITECTURE.md.
+- Everything is local. All data — metadata, HTML content, and full version
+  history — lives in a single SQLite database in the OS app-data directory.
+  No loose files on disk. See ARCHITECTURE.md.
+- Why SQLite-only: user-visible file writes on macOS mean negotiating TCC
+  permission prompts, which MDM-managed school devices can suppress or deny.
+  The app-data directory needs no consent, so storage behaves the same on a
+  managed school laptop as on a personal one.
 
-### 7.5 Import / Export
-- Import: drag a `.html` file into the window.
-- Export: save a page as `.html`, or a collection as a `.zip`.
+### 7.5 Import / Export (planned)
+- Import: drag a `.html` file into the window (v0.5-dev).
+- Export: save a page as `.html`, or a collection as a `.zip` (v0.6-dev).
+- Until export ships, **Copy for AI** is the way to get a page's HTML out.
 
 ## 8. Non-functional requirements
 
 - **Safe:** untrusted HTML must never access the app's internals or the user's files.
 - **Fast:** opening a page preview < 200 ms for typical pages.
 - **Small:** installer under ~15 MB (a Tauri advantage).
-- **Offline:** works with no interne[118;1:3ut (except pages the user explicitly allows online).
+- **Offline:** works with no internet (except pages the user explicitly allows online).
 - **Accessible:** keyboard shortcuts for main actions, readable contrast, dark mode.
 
 ## 9. Success criteria
@@ -108,6 +120,5 @@ When the user pastes text:
 
 ## 10. Open questions
 
-- App name (placeholder: Pagebox).
 - How to generate real thumbnails across Windows / macOS / Linux webviews?
 - Should "allow internet" be remembered per page?
