@@ -53,10 +53,16 @@ without learning how to manage files, editors, or local servers.
 
 ## Status
 
-v0.4 — paste & sandboxed preview, collections, replace + version history, tags,
-search, and AI prompt tools. The release pipeline builds installers and portable
-ZIPs for every platform; the first public release is being prepared.
-See [ROADMAP.md](ROADMAP.md).
+**Release line `v0.1.x`** — current app version `0.1.0`; the first public release
+is being prepared. **Development: `v0.4-dev` complete** — paste & sandboxed
+preview, collections, replace + version history, tags, search, and AI prompt
+tools. The release pipeline builds installers and portable ZIPs for every
+platform. Next up: `v0.5-dev` (polish). See [ROADMAP.md](ROADMAP.md).
+
+> **Two version tracks:** roadmap milestones are dev checkpoints with a `-dev`
+> suffix (`v0.1-dev` … `v0.6-dev`) and are never tagged. Published releases are
+> `v0.1.x` — the patch number bumps per release, regardless of which milestone
+> is in flight.
 
 > Built speedrun-style with heavy AI assistance (**Qwen4-Max**). The
 > [devlog](docs/devlog/the-speedrun.md) is the honest record of what I did,
@@ -103,10 +109,14 @@ without a desktop build. Real on-disk storage requires `pnpm tauri dev`.
 
 ### Cutting a release
 
-Push a version tag and GitHub Actions builds every platform, then attaches the
-installers and portable ZIPs to a **draft** release:
+Releases are tagged `v0.1.x` — never the roadmap's `-dev` milestones (the
+workflow only fires on `v*.*.*` tags). Bump `"version"` in
+`src-tauri/tauri.conf.json` and `package.json` to match, then push the tag.
+GitHub Actions builds every platform and attaches the installers and portable
+ZIPs to a **draft** release:
 
 ```bash
+# after bumping "version" to 0.1.1 in tauri.conf.json + package.json
 git tag v0.1.1
 git push origin v0.1.1
 ```

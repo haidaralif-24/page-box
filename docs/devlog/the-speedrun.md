@@ -5,7 +5,8 @@
 > Dated daily entries would be fake precision, and the exact timeline already
 > exists in `git log`. So this is a single entry told in **phases**, each ending
 > with the commits it covers — you can always reconstruct the real order from
-> the SHAs.
+> the SHAs. Milestone names carry the roadmap's `-dev` suffix (`v0.4-dev` is a
+> development checkpoint, not a release); published releases are tagged `v0.1.x`.
 
 > **AI disclaimer — read this first.** I use AI a lot in this development,
 > specifically **Qwen4-Max**. Most of the code was AI-written from my specs and
@@ -36,7 +37,7 @@ Commits: `a97e365` (initial project docs)
 
 ---
 
-## Phase 1 — v0.1: paste and preview
+## Phase 1 — v0.1-dev: paste and preview
 
 **What I did**
 - Replaced the Tauri starter demo with the real app:
@@ -45,7 +46,7 @@ Commits: `a97e365` (initial project docs)
     + `meta.json`), commands `add_page`, `list_pages`, `get_page_html`, `delete_page`.
   - React frontend: gallery of page cards, paste dialog with live title
     detection and a "doesn't look like HTML" warning, sandboxed preview,
-    delete with confirm (pulled forward from v0.2 — tiny, and makes testing sane).
+    delete with confirm (pulled forward from v0.2-dev — tiny, and makes testing sane).
 - Preview security per SECURITY.md: `<iframe sandbox="allow-scripts" srcdoc>`
   (no `allow-same-origin`), CSP meta injected before render, network off by
   default. App CSP set in `tauri.conf.json` (was `null`), unused opener
@@ -75,10 +76,10 @@ Commits: `4bc6433`
 
 ---
 
-## Phase 2 — v0.2 + v0.3: collections, replace, history, tags, search
+## Phase 2 — v0.2-dev + v0.3-dev: collections, replace, history, tags, search
 
-The SQLite schema and collections (the v0.2 milestone) landed in the same
-stretch — there's no standalone v0.2 commit in the history; it's folded into
+The SQLite schema and collections (the v0.2-dev milestone) landed in the same
+stretch — there's no standalone v0.2-dev commit in the history; it's folded into
 this push. Speedrun means milestones blur together.
 
 **What I did**
@@ -107,7 +108,7 @@ Commits: `2d6275c`
 
 ---
 
-## Phase 3 — v0.4: the storage saga (real files → pure SQLite)
+## Phase 3 — v0.4-dev: the storage saga (real files → pure SQLite)
 
 The biggest reversal of the sprint, and the one worth telling in full.
 
@@ -253,8 +254,8 @@ Commits: `c553f7a`, `b0f5e1a`
 ## Phase 6 — First release + portable ZIPs for MDM-managed devices
 
 **What I did**
-- Added `release.yaml`: push a tag → GitHub Actions builds macOS (arm64 + x64),
-  Windows and Linux, and attaches everything to a **draft** release.
+- Added `release.yaml`: push a `v0.1.x` tag → GitHub Actions builds macOS
+  (arm64 + x64), Windows and Linux, and attaches everything to a **draft** release.
 - Fixed a rendering bug and a table bug found while testing the build.
 - Then the real-world problem: **my school laptop is MDM-managed** — DMGs
   won't mount and installers are blocked. I know other schools manage their
@@ -268,6 +269,10 @@ Commits: `c553f7a`, `b0f5e1a`
 - Wrote INSTALLATION.md (personal devices, managed devices, and a section for
   IT admins), gave the README a Download section + badges, backfilled this
   devlog from the commit history, and added the MIT LICENSE.
+- Settled the versioning: roadmap milestones are `-dev` checkpoints
+  (`v0.1-dev` … `v0.6-dev`), releases stay on the `v0.1.x` line starting at
+  `v0.1.0`, and the workflow only fires on `v*.*.*` tags so a milestone name
+  can never accidentally ship.
 
 **What went wrong**
 - The first workflow run tripped over the pnpm setup before any platform
@@ -286,7 +291,7 @@ Commits: `c553f7a`, `b0f5e1a`
 - Distribution is part of the product. An app students can't open on their
   school laptop might as well not exist.
 
-Commits: `0b8e7ab`, `92e2977`, `acbc23e`, `796f1cc` (PR #1 merge `57a3362`), `51ec264`, `a187b5e`
+Commits: `0b8e7ab`, `92e2977`, `acbc23e`, `796f1cc` (PR #1 merge `57a3362`), `51ec264`, `a187b5e`, `dc781ba`
 
 ---
 
@@ -310,4 +315,4 @@ Commits: `0b8e7ab`, `92e2977`, `acbc23e`, `796f1cc` (PR #1 merge `57a3362`), `51
 
 - Publish the draft release; verify the Windows portable ZIP on a managed PC.
 - Ask IT about allowlisting / MDM deployment; look into signing + notarization.
-- v0.5 polish: shortcuts, drag-and-drop, empty states, security test pages.
+- v0.5-dev polish: shortcuts, drag-and-drop, empty states, security test pages.

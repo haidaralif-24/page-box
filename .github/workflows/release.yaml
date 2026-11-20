@@ -3,7 +3,9 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      # Release tags only (v0.1.0, v0.1.1, ...). Roadmap milestones use a -dev
+      # suffix (v0.4-dev) and must never trigger a release build.
+      - 'v*.*.*'
   workflow_dispatch:
 
 jobs:

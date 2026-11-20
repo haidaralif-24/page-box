@@ -1,16 +1,22 @@
 # Roadmap
 
-## v0.1 - Paste and preview
+> **How versions work here:** roadmap milestones are *development checkpoints*
+> and carry a `-dev` suffix (`v0.1-dev` … `v0.6-dev`). They are never tagged or
+> released. Published releases use **`v0.1.x`** (`v0.1.0`, `v0.1.1`, …) — the
+> patch number bumps with each release, independent of milestone progress.
+> The app version lives in `src-tauri/tauri.conf.json` (currently `0.1.0`).
+
+## v0.1-dev - Paste and preview
 - [x] Tauri + React + TypeScript project running
 - [x] Add page: paste box, input cleaning, title detection
 - [x] Sandboxed preview iframe
 - [x] Save HTML to disk, list saved pages after restart
 - [x] Unit tests for input cleaning + CSP injection (vitest, mirrored Rust tests)
 
-Note: page delete was pulled forward from v0.2 (small, and makes testing easier).
-v0.1 stores metadata as `meta.json` per page; SQLite replaces it in v0.2.
+Note: page delete was pulled forward from v0.2-dev (small, and makes testing easier).
+v0.1-dev stores metadata as `meta.json` per page; SQLite replaces it in v0.2-dev.
 
-## v0.2 - Organize
+## v0.2-dev - Organize
 - [x] SQLite schema + migrations
 - [x] Collections: create, rename, nest, move, delete
 - [x] Sidebar tree
@@ -18,21 +24,21 @@ v0.1 stores metadata as `meta.json` per page; SQLite replaces it in v0.2.
 - [x] Move pages between collections
 - [x] Rename and delete pages
 
-## v0.3 - Replace, history, tags
+## v0.3-dev - Replace, history, tags
 - [x] Replace with new version
 - [x] Version history list, preview, restore
 - [x] Copy for AI button
 - [x] Tags
 - [x] Search by title and tag
 
-## v0.4 - Directory-Styled Storage Structure
+## v0.4-dev - Directory-Styled Storage Structure
 - [x] Virtual nested folder structure (collections with `parent_id`)
 - [x] Tree-view sidebar with expand/collapse functionality
 - [x] All data stored purely in SQLite (no actual files on disk)
 - [x] Migration script for legacy data
 - [x] macOS permission error resolved
 
-## v0.5 - Polish
+## v0.5-dev - Polish
 - [ ] Keyboard shortcuts
 - [ ] Drag-and-drop (pages into collections, `.html` files into the window)
 - [ ] Dark mode
@@ -40,7 +46,7 @@ v0.1 stores metadata as `meta.json` per page; SQLite replaces it in v0.2.
 - [ ] Allow-internet toggle with clear labeling
 - [ ] Security test pages all pass
 
-## v0.6 - Ship
+## v0.6-dev - Ship
 - [ ] Real thumbnails
 - [ ] Full-text content search
 - [ ] Export page / collection (.html, .zip)
