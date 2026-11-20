@@ -4,7 +4,7 @@
 > and carry a `-dev` suffix (`v0.1-dev` … `v0.6-dev`). They are never tagged or
 > released. Published releases use **`v0.1.x`** (`v0.1.0`, `v0.1.1`, …) — the
 > patch number bumps with each release, independent of milestone progress.
-> The app version lives in `src-tauri/tauri.conf.json` (currently `0.1.0`).
+> The app version lives in `src-tauri/tauri.conf.json` (currently `0.1.2`).
 
 ## v0.1-dev - Paste and preview
 - [x] Tauri + React + TypeScript project running
@@ -38,21 +38,24 @@ v0.1-dev stores metadata as `meta.json` per page; SQLite replaces it in v0.2-dev
 - [x] Migration script for legacy data
 - [x] macOS permission error resolved
 
-## v0.5-dev - Polish
-- [ ] Keyboard shortcuts
-- [ ] Drag-and-drop (pages into collections, `.html` files into the window)
-- [ ] Dark mode
-- [ ] Friendly empty states and error messages
-- [ ] Allow-internet toggle with clear labeling
-- [ ] Security test pages all pass
-
-## v0.6-dev - Ship
+## v0.5-dev - Ship
 - [ ] Real thumbnails
 - [ ] Full-text content search
 - [ ] Export page / collection (.html, .zip)
-- [ ] App icon, installer builds (Windows / macOS / Linux if possible)
+- [x] App icon, installer builds (Windows / macOS / Linux if possible)
 - [ ] README demo GIF + screenshots
-- [ ] First GitHub release
+- [x] First GitHub release
+
+Note: the icon, installers, and first public release shipped early (release
+line `v0.1.0`–`v0.1.2`); the remaining items above are still open.
+
+## v0.6-dev - Polish
+- [ ] Keyboard shortcuts
+- [ ] Drag-and-drop (pages into collections, `.html` files into the window)
+- [x] Dark mode (GitHub Dark theme, shipped early in v0.4-dev)
+- [ ] Friendly empty states and error messages
+- [ ] Allow-internet toggle with clear labeling
+- [ ] Security test pages all pass
 
 ## Ideas for later
 - Built-in "Ask AI to edit" (bring your own API key)

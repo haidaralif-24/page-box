@@ -53,11 +53,12 @@ without learning how to manage files, editors, or local servers.
 
 ## Status
 
-**Release line `v0.1.x`** — current app version `0.1.0`; the first public release
-is being prepared. **Development: `v0.4-dev` complete** — paste & sandboxed
-preview, collections, replace + version history, tags, search, and AI prompt
-tools. The release pipeline builds installers and portable ZIPs for every
-platform. Next up: `v0.5-dev` (polish). See [ROADMAP.md](ROADMAP.md).
+**Shipped.** The first public release is out — release line `v0.1.x`, latest
+`v0.1.2` (current app version `0.1.2`). **Development: `v0.4-dev` complete** —
+paste & sandboxed preview, collections, replace + version history, tags, search,
+and AI prompt tools. The release pipeline builds installers and portable ZIPs
+for every platform. Next up: the rest of `v0.5-dev` (ship: thumbnails, full-text
+search, export, demo GIF), then `v0.6-dev` (polish). See [ROADMAP.md](ROADMAP.md).
 
 > **Two version tracks:** roadmap milestones are dev checkpoints with a `-dev`
 > suffix (`v0.1-dev` … `v0.6-dev`) and are never tagged. Published releases are
