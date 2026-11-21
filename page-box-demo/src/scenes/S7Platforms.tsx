@@ -58,7 +58,7 @@ const Term: React.FC<{ prompt: string; cmd: string }> = ({ prompt, cmd }) => (
 );
 
 const cardStyle: React.CSSProperties = {
-  position: "absolute", top: 508, width: 800, height: 300,
+  position: "absolute", top: 508, width: 800, height: 330,
   background: C.panel, border: `1.5px solid ${C.border}`, borderRadius: 16,
   padding: 22, display: "flex", flexDirection: "column", gap: 12,
   boxShadow: "0 14px 40px #00000066",
@@ -181,8 +181,8 @@ export const S7Platforms: React.FC = () => {
         </div>
         <div style={quote}>“Pagebox is damaged and can’t be opened”</div>
         <div style={sub}>= quarantine flag on an unsigned app, not actual damage</div>
-        <Term prompt="$" cmd="xattr -dr com.apple.quarantine /Applications/Pagebox.app" />
-        <div style={hint}>Tip: type the command, then drag the app into Terminal to fill in its path.</div>
+        <Term prompt="$" cmd="xattr -dr com.apple.quarantine ~/Downloads/Pagebox.app" />
+        <div style={hint}>Just downloaded? It’s in Downloads — no need to move it to Applications. App elsewhere? Drag it into Terminal to auto-fill its path.</div>
       </div>
 
       {/* Windows card */}
@@ -199,13 +199,13 @@ export const S7Platforms: React.FC = () => {
           <span style={{ color: C.muted }}>→</span>
           <span style={{ border: `1px solid ${C.accent}88`, background: `${C.accent}1f`, color: C.accentFg, borderRadius: 8, padding: "6px 14px" }}>Run anyway</span>
         </div>
-        <Term prompt="PS>" cmd="Unblock-File .\Pagebox.exe" />
-        <div style={hint}>Or: right-click Pagebox.exe → Properties → tick Unblock.</div>
+        <Term prompt="PS>" cmd="Unblock-File ~/Downloads/Pagebox.exe" />
+        <div style={hint}>Point it at your Pagebox.exe — usually in Downloads. Or: right-click it → Properties → tick Unblock.</div>
       </div>
 
       {/* trust / honesty note */}
       <div style={{
-        position: "absolute", left: 0, right: 0, top: 826, textAlign: "center",
+        position: "absolute", left: 0, right: 0, top: 852, textAlign: "center",
         opacity: trust, fontFamily: FONT.mono, fontSize: 21, color: C.muted,
       }}>
         Only bypass warnings for apps you trust · if school policy blocks it, ask IT · full steps in INSTALLATION.md

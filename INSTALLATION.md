@@ -64,15 +64,15 @@ Use the **portable ZIP** for your platform. Nothing gets mounted, nothing gets
 
 1. Download `Pagebox-<tag>-macos-arm64.zip` (Apple Silicon) or `Pagebox-<tag>-macos-x64.zip` (Intel).
 2. Double-click the ZIP in Finder → you get **Pagebox.app**.
-3. Move it to **Applications**. If that folder is locked down, use `~/Applications` instead: Finder → Go → Home, then ⌘⇧N to create a folder named `Applications`. That's your personal Applications folder — no admin needed.
+3. Keep it wherever you like — **Downloads is fine**. There's no need to move it to Applications, and on managed Macs that folder often asks for an admin password you don't have. Want it tidier? Use `~/Applications`: Finder → Go → Home, then ⌘⇧N to create a folder named `Applications`. That's your personal Applications folder — no admin needed.
 4. Try to open it: right-click → **Open**, or on macOS 15+: **System Settings → Privacy & Security → Open Anyway**.
 5. If it still says *"Pagebox is damaged and can't be opened"* — that's macOS's misleading wording for an **unsigned app with a quarantine flag**, not actual damage. Remove the flag in Terminal:
 
    ```bash
-   xattr -dr com.apple.quarantine /Applications/Pagebox.app
+   xattr -dr com.apple.quarantine ~/Downloads/Pagebox.app
    ```
 
-   Use `~/Applications/Pagebox.app` if that's where you put it. Tip: type `xattr -dr com.apple.quarantine ` (with a trailing space), then drag the app into the Terminal window to fill in the path for you.
+   That path assumes the app is still in **Downloads** — where it lands when you double-click the ZIP. Put it somewhere else (say `~/Applications`)? Adjust the path. Tip: type `xattr -dr com.apple.quarantine ` (with a trailing space), then drag the app into the Terminal window to fill in the path for you.
 
    This tells macOS to skip its download check **for this app only**. Do it only for apps you trust — like this one, whose entire source is in this repo.
 6. If it *still* won't run — "blocked by your administrator", or it quits immediately — that's your school's security policy (e.g. an app allowlist). **Stop here and ask IT** ([section below](#for-it-admins)). No file format gets around that, and you shouldn't try.
@@ -80,9 +80,9 @@ Use the **portable ZIP** for your platform. Nothing gets mounted, nothing gets
 ### Windows (managed)
 
 1. Download `Pagebox-<tag>-windows-x64-portable.zip`.
-2. Right-click → **Extract All…** and extract somewhere you can write, e.g. `Documents\Pagebox`. Don't run the exe from inside the ZIP preview — extract first.
+2. Right-click → **Extract All…** and extract somewhere you can write — the default (a folder inside **Downloads**) is fine, or e.g. `Documents\Pagebox`. Don't run the exe from inside the ZIP preview — extract first.
 3. Double-click **Pagebox.exe**.
-4. SmartScreen: **More info → Run anyway**. If the warning keeps coming back, unblock the file once: right-click `Pagebox.exe` → **Properties** → tick **Unblock** → **OK**. (PowerShell equivalent, from the app folder: `Unblock-File .\Pagebox.exe`.)
+4. SmartScreen: **More info → Run anyway**. If the warning keeps coming back, unblock the file once: right-click `Pagebox.exe` → **Properties** → tick **Unblock** → **OK**. (PowerShell equivalent: `Unblock-File ~/Downloads/Pagebox.exe` — adjust the path to wherever you extracted it; Extract All usually creates a subfolder in Downloads.)
 5. Optional: right-click `Pagebox.exe` → **Send to → Desktop (create shortcut)** so you don't have to dig through folders every time.
 6. If you get *"This app has been blocked by your system administrator"* (AppLocker/WDAC), or SmartScreen shows no "Run anyway" button — that's school policy. Ask IT ([section below](#for-it-admins)).
 

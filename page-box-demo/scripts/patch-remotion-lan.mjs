@@ -27,11 +27,19 @@ if (s.includes("const host = '127.0.0.1';")) {
 
 let p = fs.readFileSync(prep, "utf8");
 const needle = "serveUrl: `http://localhost:${serverPort}`";
-if (p.includes(needle)) {
-  p = p.replace(needle, `serveUrl: \`http://${lanIp}:\${serverPort}\` /* LAN patch */`);
-  fs.writeFileSync(prep, p); console.log(`patched prepare-server.js -> serveUrl http://${lanIp}:<port>`);
-} else if (p.includes("LAN patch")) console.log("prepare-server.js already patched");
-else { console.error("serveUrl needle not found — Remotion version changed?"); process.exit(1); }
+// Resolve the LAN IP at RUNTIME, not patch time: school DHCP moves this Mac
+// between subnets, and a baked-in IP goes stale (Chrome: ERR_CONNECTION_RESET).
+const dyn = 'serveUrl: `http://${(() => { const os = require("node:os"); const ip = Object.values(os.networkInterfaces()).flat().find((i) => i && i.family === "IPv4" && !i.internal && /^(192\\.168|10\\.|172\\.)/.test(i.address)); return ip ? ip.address : "localhost"; })()}:${serverPort}` /* LAN patch (dynamic) */';
+const oldBaked = /serveUrl: `http:\/\/[\d.]+:\$\{serverPort\}` \/\* LAN patch \*\//;
+if (p.includes("/* LAN patch (dynamic) */")) {
+  console.log("prepare-server.js already patched (dynamic LAN IP)");
+} else if (p.includes(needle)) {
+  p = p.replace(needle, dyn);
+  fs.writeFileSync(prep, p); console.log("patched prepare-server.js -> serveUrl uses runtime LAN IP");
+} else if (oldBaked.test(p)) {
+  p = p.replace(oldBaked, dyn);
+  fs.writeFileSync(prep, p); console.log("refreshed stale baked-in LAN IP -> runtime LAN IP lookup");
+} else { console.error("serveUrl needle not found — Remotion version changed?"); process.exit(1); }
 
 // 3) OffthreadVideo frame extraction: the browser bundle hardcodes
 //    http://localhost:<proxyPort>/proxy — SWG stalls that loopback request,
