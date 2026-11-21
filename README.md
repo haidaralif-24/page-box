@@ -2,7 +2,12 @@
 
 > A notes app for AI-generated HTML. Paste it, see it, organize it.
 
-https://github.com/user-attachments/assets/1fb4d738-2529-4c6b-a396-b98f130c1748
+
+
+https://github.com/user-attachments/assets/3755392b-005c-4f05-98a5-4121baaa6f71
+
+
+
 [![Release](https://github.com/haidaralif-24/page-box/actions/workflows/release.yaml/badge.svg)](https://github.com/haidaralif-24/page-box/actions/workflows/release.yaml)
 [![Latest release](https://img.shields.io/github/v/release/haidaralif-24/page-box?label=latest%20release)](https://github.com/haidaralif-24/page-box/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
