@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       quality:
-        description: "web = 540p + small file (README), full = 1080p"
+        description: "full = 1080p (default), web = 540p + small file (README)"
         type: choice
-        default: web
+        default: full
         options: [web, full]
       frames:
         description: "Optional frame range for a quick test, e.g. 520-610 (empty = whole video)"
@@ -29,7 +29,9 @@ concurrency:
 jobs:
   render:
     runs-on: ubuntu-latest # 4 vCPU / 16 GB, glibc >= 2.35
-    timeout-minutes: 60
+    # Full 1080p render of the whole timeline takes ~2-3x the 540p pass
+    # (which ran in ~10 min); 90 min leaves plenty of headroom.
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: page-box-demo
